@@ -19,13 +19,8 @@ LOAN_CONFIG = {
 
 DEFAULT_TENURE = {"Personal OD": 1, "Home Loan": 15, "First Time Home Buyer": 20}
 
-PRIORITY_RANKING = {
-    "Personal Term Loan (PTL)": 1, "Home Loan": 2, "First Time Home Buyer": 3,
-    "Auto Loan": 4, "Mortgage Loan": 5, "Education Loan": 6, "Personal OD": 99 
-}
-
 # ==========================================
-# 🎨 MODERN PREMIUM THEME
+# 🎨 MODERN PREMIUM THEME & UI SCALING
 # ==========================================
 st.set_page_config(
     page_title="DTI Analysis Engine", 
@@ -44,37 +39,68 @@ st.markdown("""
         color: #1a1f36;
         letter-spacing: -0.01em;
     }
+
+    /* 90% Zoom / Scaling Effect */
+    .block-container {
+        max-width: 95% !important;
+        transform: scale(0.90); 
+        transform-origin: top center;
+        width: 111% !important; 
+    }
     
     /* Main Background */
     .main { 
         background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
-        padding: 2rem 1rem;
     }
     
-    /* Sidebar */
+    /* Sidebar Container & Scrollbar Styling */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-        border-right: none;
         box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+    }
+    
+    /* Sidebar Scrollbar Customization */
+    section[data-testid="stSidebar"] ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    section[data-testid="stSidebar"] ::-webkit-scrollbar-track {
+        background: #1e293b; 
+    }
+    section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
+        background: #475569; 
+        border-radius: 4px;
+    }
+    section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; 
     }
     
     [data-testid="stSidebar"] * {
         color: #f1f5f9;
     }
     
+    /* Sidebar Inputs - Color Changed from Black to Dark Grey */
     [data-testid="stSidebar"] input,
     [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
         background: rgba(255, 255, 255, 0.95) !important;
-        color: #0f172a !important;
+        color: #334155 !important; /* Changed from #0f172a (Black) to Slate Grey */
+        font-weight: 600;
     }
     
-    /* Buttons */
-    .stButton > button {
+    /* Buttons - Red Override for Primary */
+    div.stButton > button[kind="primary"] {
+        background-color: #ef4444 !important;
+        border-color: #ef4444 !important;
+        color: white !important;
         border-radius: 8px;
         font-weight: 600;
         transition: all 0.3s ease;
     }
-    
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #dc2626 !important;
+        border-color: #dc2626 !important;
+    }
+
     /* Metric Cards */
     .metric-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
@@ -91,6 +117,9 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace;
     }
     
+    .metric-delta-positive { color: #10b981; font-weight: 700; font-size: 0.9rem; }
+    .metric-delta-negative { color: #ef4444; font-weight: 700; font-size: 0.9rem; }
+
     /* Status Banners */
     .status-banner {
         padding: 1rem 1.5rem;
@@ -138,14 +167,66 @@ def calculate_obligation(loan_type, principal, rate, tenure):
             return (principal * r_monthly * ((1 + r_monthly) ** n_months)) / (((1 + r_monthly) ** n_months) - 1)
         except: return 0.0
 
+def run_waterfall_allocation(df, total_income):
+    """
+    PRIORITY LOGIC:
+    1. Sort by Required Multiplier (Highest First).
+    2. Allocate Income sequentially.
+    3. Last item gets remaining income calculation.
+    """
+    # Sort by Multiplier Descending (Highest Priority First)
+    df_sorted = df.sort_values(by='Required Multiplier', ascending=False).reset_index(drop=True)
+    
+    run_inc = total_income
+    pass_flags = []
+    act_covs = []
+    snaps = []
+    
+    num_loans = len(df_sorted)
+    
+    for idx, row in df_sorted.iterrows():
+        obl = row['Obligation']
+        req_mult = row['Required Multiplier']
+        req_amt = obl * req_mult
+        
+        snaps.append(run_inc)
+        
+        # Check if this is the LAST loan in the priority queue
+        is_last_loan = (idx == num_loans - 1)
+        
+        if not is_last_loan:
+            # Standard Allocation
+            if run_inc >= req_amt:
+                act_covs.append(req_mult) # Met requirement
+                pass_flags.append(True)
+                run_inc -= req_amt
+            else:
+                # Failed intermediate loan
+                actual = run_inc / obl if obl > 0 else 0
+                act_covs.append(actual)
+                pass_flags.append(False)
+                run_inc = 0 # Depleted
+        else:
+            # Final Loan Logic: Calculate using remaining income
+            actual = run_inc / obl if obl > 0 else 0
+            act_covs.append(actual)
+            pass_flags.append(actual >= req_mult)
+            # Income technically remains as is or depletes, doesn't matter for calc
+            
+    df_sorted['Pass_Status'] = pass_flags
+    df_sorted['Actual Coverage'] = act_covs
+    df_sorted['Available_Income_Snapshot'] = snaps
+    
+    return df_sorted
+
 # ==========================================
-# 📄 ENTERPRISE PDF ENGINE (NO CHARTS)
+# 📄 ENTERPRISE PDF ENGINE
 # ==========================================
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 14)
         self.set_text_color(15, 23, 42)
-        self.cell(0, 10, 'DTI ANALYSIS', 0, 1, 'L')
+        self.cell(0, 10, 'DTI ANALYSIS REPORT', 0, 1, 'L')
         self.set_draw_color(59, 130, 246)
         self.set_line_width(0.5)
         self.line(10, 20, 200, 20)
@@ -154,9 +235,9 @@ class PDFReport(FPDF):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(100, 116, 139)
-        self.cell(0, 10, f'Page {self.page_no()} | Generated by DTI Analysis Engine | {datetime.now().strftime("%B %d, %Y")}', 0, 0, 'C')
+        self.cell(0, 10, f'Page {self.page_no()} | Generated by DTI Engine | {datetime.now().strftime("%B %d, %Y")}', 0, 0, 'C')
 
-def generate_pdf(client, income, df_active, is_pass, exposure, shortfall, mode, active_s_name, active_s_rate, active_s_inc, raw_loans, matrix_scenarios, stressed_sources_list=None):
+def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, mode, active_s_name, active_s_rate, active_s_inc, raw_loans, matrix_scenarios, agg_dti, stressed_sources_list=None):
     pdf = PDFReport()
     pdf.add_page()
     
@@ -171,52 +252,55 @@ def generate_pdf(client, income, df_active, is_pass, exposure, shortfall, mode, 
     pdf.set_font("Arial", "", 10)
     pdf.cell(45, 6, "Client Name:", 0, 0); pdf.set_font("Arial", "B", 10); pdf.cell(145, 6, str(client), 0, 1)
     
+    # Logic for Mode display
+    display_mode = mode.upper()
+    if "BASELINE" in display_mode or active_s_name == "Baseline (No Stress)":
+        display_mode = "NORMAL - STRESS N/A"
+
     pdf.set_font("Arial", "", 10)
     pdf.cell(45, 6, "Analysis Date:", 0, 0); pdf.cell(55, 6, datetime.now().strftime("%B %d, %Y"), 0, 0)
-    pdf.cell(45, 6, "Analysis Mode:", 0, 0); pdf.set_font("Arial", "B", 10); pdf.cell(0, 6, mode.upper(), 0, 1)
+    pdf.cell(45, 6, "Analysis Mode:", 0, 0); pdf.set_font("Arial", "B", 10); pdf.cell(0, 6, display_mode, 0, 1)
     
     pdf.set_font("Arial", "", 10)
     pdf.cell(45, 6, "Monthly Income:", 0, 0); pdf.cell(55, 6, f"Rs. {income:,.2f}", 0, 0)
     pdf.cell(45, 6, "Total Exposure:", 0, 0); pdf.cell(0, 6, f"Rs. {exposure:,.2f}", 0, 1)
     
+    # Aggregate DTI Line - Removed "(Income ÷ Obligation)" per request
+    pdf.cell(45, 6, "Aggregate Coverage:", 0, 0); 
+    pdf.set_font("Arial", "B", 10); 
+    pdf.cell(0, 6, f"{agg_dti:.2f}x", 0, 1)
+
     if shortfall > 0:
         pdf.set_text_color(239, 68, 68)
         pdf.set_font("Arial", "B", 10)
         pdf.cell(45, 6, "Income Shortfall:", 0, 0); pdf.cell(0, 6, f"Rs. {shortfall:,.2f} (CRITICAL DEFICIT)", 0, 1)
         pdf.set_text_color(0,0,0)
 
-    # 2. SCENARIO ANALYSIS
+    # 2. SCENARIO DETAILS
     pdf.ln(6)
     pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 8, "SCENARIO ANALYSIS", 0, 1)
+    pdf.cell(0, 8, "SCENARIO DETAILS", 0, 1)
     pdf.set_draw_color(226, 232, 240)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
     
     pdf.set_fill_color(219, 234, 254)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(190, 7, f"  Active Scenario: {active_s_name}", 1, 1, 'L', fill=True)
+    pdf.cell(190, 7, f"  Active Configuration: {active_s_name}", 1, 1, 'L', fill=True)
     
     if active_s_rate > 0 or active_s_inc > 0:
         pdf.set_font("Arial", "", 9)
         pdf.set_fill_color(248, 250, 252)
         pdf.cell(95, 6, f"Interest Rate Shock: +{active_s_rate:.2f}%", 1, 0, 'L', fill=True)
         pdf.cell(95, 6, f"Income Reduction: -{active_s_inc:.2f}%", 1, 1, 'L', fill=True)
-        
-        # Display Affected Income Sources
         if stressed_sources_list:
             source_str = ", ".join(stressed_sources_list)
-            pdf.ln(1)
+            pdf.ln(6)
             pdf.set_font("Arial", "I", 8)
-            pdf.cell(190, 6, f"Income Stress Applied To: {source_str}", 0, 1, 'L')
-        elif active_s_inc > 0:
-            pdf.ln(1)
-            pdf.set_font("Arial", "I", 8)
-            pdf.cell(190, 6, "Income Stress Applied To: Global Gross Income", 0, 1, 'L')
+            pdf.cell(190, 6, f"Stress Applied To: {source_str}", 0, 1, 'L')
     
     pdf.ln(3)
-    
     res_text = "APPROVED - Within Risk Tolerance" if is_pass else "DECLINED - Exceeds Risk Limits"
     pdf.set_text_color(16, 185, 129) if is_pass else pdf.set_text_color(239, 68, 68)
     pdf.set_font("Arial", "B", 11)
@@ -227,31 +311,29 @@ def generate_pdf(client, income, df_active, is_pass, exposure, shortfall, mode, 
     pdf.ln(6)
     pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 8, "PORTFOLIO BREAKDOWN", 0, 1)
+    pdf.cell(0, 8, "PRIORITY ALLOCATION BREAKDOWN", 0, 1)
     pdf.set_draw_color(226, 232, 240)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
     
     cols = [45, 25, 25, 25, 30, 20, 20]
-    headers = ["Facility Type", "Principal", "Payment", "Avail. Inc.", "Coverage", "Required", "Status"]
+    headers = ["Facility Type", "Principal", "Payment", "Rem. Inc.", "Actual Cov.", "Required", "Status"]
     pdf.set_font("Arial", "B", 8)
     pdf.set_fill_color(241, 245, 249)
     for i, h in enumerate(headers): pdf.cell(cols[i], 7, h, 1, 0, 'C', fill=True)
     pdf.ln()
     
     pdf.set_font("Arial", "", 8)
-    for idx, row in df_active.iterrows():
+    for idx, row in df_main_results.iterrows():
         fill = (idx % 2 == 0)
         pdf.set_fill_color(255, 255, 255) if not fill else pdf.set_fill_color(248, 250, 252)
         
         pdf.cell(cols[0], 7, str(row['Loan Type']), 1, 0, 'L', fill)
-        pdf.cell(cols[1], 7, f"Rs. {row['Amount']:,.0f}", 1, 0, 'R', fill)
-        pdf.cell(cols[2], 7, f"Rs. {row['Obligation']:,.0f}", 1, 0, 'R', fill)
-        pdf.cell(cols[3], 7, f"Rs. {row['Available_Income_Snapshot']:,.0f}", 1, 0, 'R', fill)
+        pdf.cell(cols[1], 7, f"{row['Amount']:,.0f}", 1, 0, 'R', fill)
+        pdf.cell(cols[2], 7, f"{row['Obligation']:,.0f}", 1, 0, 'R', fill)
+        pdf.cell(cols[3], 7, f"{row['Available_Income_Snapshot']:,.0f}", 1, 0, 'R', fill)
         
         cov_txt = f"{row['Actual Coverage']:.2f}x"
-        if active_s_rate > 0 or active_s_inc > 0: 
-            cov_txt += f" ({row['Pre_Stress_Coverage']:.2f}x)"
         pdf.cell(cols[4], 7, cov_txt, 1, 0, 'C', fill)
         pdf.cell(cols[5], 7, f"{row['Required Multiplier']:.2f}x", 1, 0, 'C', fill)
         
@@ -260,74 +342,6 @@ def generate_pdf(client, income, df_active, is_pass, exposure, shortfall, mode, 
         else: pdf.set_text_color(16, 185, 129)
         pdf.cell(cols[6], 7, status, 1, 1, 'C', fill)
         pdf.set_text_color(0,0,0)
-
-    # 4. MULTI-SCENARIO MATRIX
-    if matrix_scenarios and len(matrix_scenarios) > 0:
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 12)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 8, "MULTI-SCENARIO STRESS MATRIX", 0, 1)
-        pdf.set_draw_color(226, 232, 240)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(4)
-        
-        pdf.set_font("Arial", "I", 9)
-        pdf.set_text_color(71, 85, 105)
-        pdf.cell(0, 6, f"Comprehensive stress analysis across {len(matrix_scenarios)} scenario configurations.", 0, 1)
-        pdf.ln(2)
-        
-        # Table Headers
-        pdf.set_font("Arial", "B", 9)
-        pdf.set_fill_color(241, 245, 249)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(60, 7, "Scenario Name", 1, 0, 'L', fill=True)
-        pdf.cell(50, 7, "Stress Parameters", 1, 0, 'C', fill=True)
-        pdf.cell(30, 7, "Net Income", 1, 0, 'R', fill=True)
-        pdf.cell(30, 7, "Obligation", 1, 0, 'R', fill=True)
-        pdf.cell(20, 7, "Result", 1, 1, 'C', fill=True)
-        
-        pdf.set_font("Arial", "", 9)
-        
-        for idx, (s_name, s_vals) in enumerate(matrix_scenarios.items()):
-            fill = (idx % 2 == 0)
-            pdf.set_fill_color(255, 255, 255) if not fill else pdf.set_fill_color(248, 250, 252)
-            
-            s_inc = income * (1.0 - (s_vals["Income"]/100.0))
-            
-            s_obl_sum = sum(loan['Base_Obligation'] if loan['Is_Manual'] else 
-                            calculate_obligation(loan['Loan Type'], loan['Amount'], 
-                                                 loan['Base Rate']+s_vals["Rate"], loan['Tenure']) 
-                            for loan in raw_loans)
-            
-            # Quick pass/fail check
-            temp_loans = pd.DataFrame(raw_loans)
-            temp_loans['Stressed_Obl'] = temp_loans.apply(
-                lambda r: r['Base_Obligation'] if r['Is_Manual'] else 
-                calculate_obligation(r['Loan Type'], r['Amount'], r['Base Rate']+s_vals["Rate"], r['Tenure']), axis=1)
-            temp_loans['Priority'] = temp_loans['Loan Type'].map(PRIORITY_RANKING).fillna(99)
-            temp_loans = temp_loans.sort_values('Priority')
-            
-            run_i = s_inc
-            passed = True
-            for _, r in temp_loans.iterrows():
-                req = r['Stressed_Obl'] * r['Required Multiplier']
-                if run_i >= req:
-                    run_i -= req
-                else:
-                    cov = run_i / r['Stressed_Obl'] if r['Stressed_Obl'] > 0 else 0
-                    if cov < r['Required Multiplier']:
-                        passed = False
-                        break
-            
-            pdf.cell(60, 7, str(s_name), 1, 0, 'L', fill)
-            pdf.cell(50, 7, f"+{s_vals['Rate']:.1f}% Rate | -{s_vals['Income']:.1f}% Income", 1, 0, 'C', fill)
-            pdf.cell(30, 7, f"Rs. {s_inc:,.0f}", 1, 0, 'R', fill)
-            pdf.cell(30, 7, f"Rs. {s_obl_sum:,.0f}", 1, 0, 'R', fill)
-            
-            res_s = "PASS" if passed else "FAIL"
-            pdf.set_text_color(16, 185, 129) if passed else pdf.set_text_color(239, 68, 68)
-            pdf.cell(20, 7, res_s, 1, 1, 'C', fill)
-            pdf.set_text_color(0, 0, 0)
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -353,7 +367,9 @@ with st.sidebar:
         c1, c2 = st.columns([1.5, 1])
         src = c1.text_input("Income Source")
         amt = c2.number_input("Amount (Rs.)", min_value=0.0)
-        if st.button("➕ Add Source"): 
+        
+        # Red Button for Add Source
+        if st.button("➕ Add Source", type="primary"): 
             if not src or src.strip() == "":
                 st.error("❌ Please enter an Income Source name")
             elif amt <= 0:
@@ -364,8 +380,9 @@ with st.sidebar:
                 st.rerun()
         if st.session_state.income_sources:
             st.dataframe(pd.DataFrame(st.session_state.income_sources), hide_index=True)
-            if st.button("Clear All Sources"): 
+            if st.button("Clear All Sources", type="primary"): 
                 st.session_state.income_sources = []
+                st.rerun()
             gross_income = sum(x['Amount'] for x in st.session_state.income_sources)
 
     st.markdown("---")
@@ -411,7 +428,7 @@ with st.sidebar:
         
         if len(st.session_state.custom_scenarios) > 0:
             c_names = [s['Name'] for s in st.session_state.custom_scenarios]
-            active_c_name = st.selectbox("Active Scenario", c_names)
+            active_c_name = st.selectbox("Active Scenario (For Top Summary)", c_names)
             
             active_s = next((s for s in st.session_state.custom_scenarios if s['Name'] == active_c_name), None)
             if active_s:
@@ -422,7 +439,7 @@ with st.sidebar:
             
             matrix_data = {s['Name']: {'Rate': s['Rate'], 'Income': s['Income']} for s in st.session_state.custom_scenarios}
             
-            if st.button("🗑️ Clear Custom Scenarios"):
+            if st.button("🗑️ Clear Custom Scenarios", type="primary"):
                 st.session_state.custom_scenarios = []
                 st.rerun()
         else:
@@ -430,7 +447,8 @@ with st.sidebar:
             scenario_name = "None"
 
     st.markdown("---")
-    if st.button("🔄 Reset All Data", use_container_width=True):
+    # Red Button for Reset
+    if st.button("🔄 Reset All Data", type="primary", use_container_width=True):
         st.session_state.loans = []
         st.session_state.income_sources = []
         st.session_state.custom_scenarios = []
@@ -480,10 +498,9 @@ if st.session_state.loans:
         st.error("⚠️ Please configure Monthly Gross Income in the sidebar before analyzing portfolio")
         st.stop()
     
-    df = pd.DataFrame(st.session_state.loans)
-    tot_prin = df['Amount'].sum()
-    
-    # Logic Update: Detailed Income Stress
+    # -----------------------------
+    # LOGIC 1: Income Calculation
+    # -----------------------------
     eff_income = gross_income
     if enable_stress:
         if inc_mode == "Multiple Sources" and stressed_sources_selection:
@@ -494,50 +511,40 @@ if st.session_state.loans:
         else:
             eff_income = gross_income * (1.0 - (stress_inc_val / 100.0))
     
-    def get_stress_row(row):
+    # -----------------------------
+    # LOGIC 2: Base DataFrame Setup
+    # -----------------------------
+    df = pd.DataFrame(st.session_state.loans)
+    tot_prin = df['Amount'].sum()
+    
+    def get_stress_row(row, s_rate):
         if row['Is_Manual']: return row['Base_Obligation'], row['Base Rate']
-        new_r = row['Base Rate'] + stress_rate_val
+        new_r = row['Base Rate'] + s_rate
         return calculate_obligation(row['Loan Type'], row['Amount'], new_r, row['Tenure']), new_r
 
-    df[['Obligation', 'Effective_Rate']] = df.apply(lambda x: pd.Series(get_stress_row(x)), axis=1)
-    df['Priority'] = df['Loan Type'].map(PRIORITY_RANKING).fillna(99)
-    df = df.sort_values('Priority').reset_index(drop=True)
+    # Apply ACTIVE scenario params for main view
+    df[['Obligation', 'Effective_Rate']] = df.apply(lambda x: pd.Series(get_stress_row(x, stress_rate_val)), axis=1)
     
-    # Waterfall calculation
-    run_inc = eff_income
-    pass_flags = []
-    pre_covs = []
-    act_covs = []
-    snaps = []
-    overall_pass = True
+    # -----------------------------
+    # LOGIC 3: Waterfall & Aggregates
+    # -----------------------------
+    df_result = run_waterfall_allocation(df, eff_income)
     
-    for _, row in df.iterrows():
-        obl = row['Obligation']
-        pre_covs.append(gross_income / row['Base_Obligation'] if row['Base_Obligation'] > 0 else 999)
-        snaps.append(run_inc)
-        req = obl * row['Required Multiplier']
-        if run_inc >= req:
-            run_inc -= req
-            act_covs.append(row['Required Multiplier'])
-            pass_flags.append(True)
-        else:
-            act_cov = run_inc / obl if obl > 0 else 0
-            pass_flags.append(act_cov >= row['Required Multiplier'])
-            if act_cov < row['Required Multiplier']: overall_pass = False
-            act_covs.append(act_cov)
-            run_inc = 0
-            
-    df['Pass_Status'] = pass_flags
-    df['Actual Coverage'] = act_covs
-    df['Pre_Stress_Coverage'] = pre_covs
-    df['Available_Income_Snapshot'] = snaps
-
+    total_obligation = df_result['Obligation'].sum()
+    agg_dti = eff_income / total_obligation if total_obligation > 0 else 0
+    overall_pass = all(df_result['Pass_Status'])
+    
     income_shortfall = 0.0
     if not overall_pass:
-        req_ideal = sum(r['Obligation'] * r['Required Multiplier'] for _, r in df.iterrows())
+        # Shortfall is tricky in waterfall, but we can approximate by Sum(Oblig * Mult) - Income
+        req_ideal = sum(r['Obligation'] * r['Required Multiplier'] for _, r in df_result.iterrows())
         income_shortfall = max(0, req_ideal - eff_income)
 
-    # UI: Scenario Badge
+    # -----------------------------
+    # UI: Visuals
+    # -----------------------------
+    
+    # Badge
     if enable_stress:
         inc_impact_text = ""
         if inc_mode == "Multiple Sources" and stressed_sources_selection:
@@ -551,104 +558,113 @@ if st.session_state.loans:
             <div class='scenario-badge-params'>Interest Rate Impact: +{stress_rate_val:.2f}% | {inc_impact_text}</div>
         </div>""", unsafe_allow_html=True)
     
-    # UI: Metrics
+    # Metrics
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Total Exposure</div><div class='metric-value'>Rs.{tot_prin:,.0f}</div></div>", unsafe_allow_html=True)
     with k2:
-        delta_html = f"<div class='metric-delta metric-delta-negative'>+{stress_rate_val}% Rate Impact</div>" if enable_stress else ""
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>Monthly Obligation</div><div class='metric-value'>Rs.{df['Obligation'].sum():,.0f}</div>{delta_html}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Monthly Obligation</div><div class='metric-value'>Rs.{total_obligation:,.0f}</div></div>", unsafe_allow_html=True)
     with k3:
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>Available Income</div><div class='metric-value'>Rs.{run_inc:,.0f}</div></div>", unsafe_allow_html=True)
+        # Aggregate DTI - Removed "Inc ÷ Oblig" text from screen here
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Aggregate Coverage</div><div class='metric-value'>{agg_dti:.2f}x</div></div>", unsafe_allow_html=True)
     with k4:
         delta_class = "metric-delta-negative" if income_shortfall > 0 else "metric-delta-positive"
         delta_text = "Critical Deficit" if income_shortfall > 0 else "Adequate"
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Income Shortfall</div><div class='metric-value'>Rs.{income_shortfall:,.0f}</div><div class='metric-delta {delta_class}'>{delta_text}</div></div>", unsafe_allow_html=True)
 
-    # UI: Overall Status
+    # Status Banner
     if overall_pass:
         st.markdown("<div class='status-banner status-banner-pass'>✅ REQUEST APPROVED - Within Stipulated DTI Requirement</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div class='status-banner status-banner-fail'>⚠️ PORTFOLIO DECLINED - Exceeds Stipulated DTI Requirement</div>", unsafe_allow_html=True)
         
-    # UI: Matrix
-    if enable_stress and matrix_data:
-        st.markdown("### 🔍 Multi-Scenario Comparison Matrix")
-        comp_data = []
-        for p_name, p_vals in matrix_data.items():
-            s_inc = 0.0
-            if inc_mode == "Multiple Sources" and stressed_sources_selection:
-                variable_income = sum(x['Amount'] for x in st.session_state.income_sources if x['Source'] in stressed_sources_selection)
-                fixed_income = gross_income - variable_income
-                s_inc = fixed_income + (variable_income * (1.0 - (p_vals["Income"]/100.0)))
-            else:
-                s_inc = gross_income * (1.0 - (p_vals["Income"]/100.0))
-
-            s_obl_sum = sum(loan['Base_Obligation'] if loan['Is_Manual'] else 
-                            calculate_obligation(loan['Loan Type'], loan['Amount'], 
-                                                 loan['Base Rate']+p_vals["Rate"], loan['Tenure']) 
-                            for loan in st.session_state.loans)
-            status = "✅ PASS" if (s_inc - s_obl_sum) > 0 else "❌ FAIL"
-            comp_data.append({
-                "Scenario": p_name, 
-                "Parameters": f"+{p_vals['Rate']}% Rate | -{p_vals['Income']}% Income", 
-                "Net Income": f"Rs.{s_inc:,.0f}",
-                "Total Obligation": f"Rs.{s_obl_sum:,.0f}",
-                "Assessment": status
-            })
-        st.table(pd.DataFrame(comp_data))
-
-    # UI: Facility Table
-    st.markdown("### 📋 Detailed Facility Breakdown")
-    disp = df.copy()
-    disp['Status'] = disp['Pass_Status'].apply(lambda x: "✅ PASS" if x else "❌ FAIL")
-    disp['Amount'] = disp['Amount'].apply(lambda x: f"Rs.{x:,.0f}")
-    disp['Obligation'] = disp['Obligation'].apply(lambda x: f"Rs.{x:,.0f}")
-    disp['Available_Income_Snapshot'] = disp['Available_Income_Snapshot'].apply(lambda x: f"Rs.{x:,.0f}")
-    disp['Actual Coverage'] = disp['Actual Coverage'].apply(lambda x: f"{x:.2f}x")
-    disp['Effective_Rate'] = disp['Effective_Rate'].apply(lambda x: f"{x:.2f}%")
+    # ---------------------------------------------
+    # UI: Multi-Scenario Breakdown (New Feature)
+    # ---------------------------------------------
     
-    st.dataframe(
-        disp[['Loan Type', 'Amount', 'Effective_Rate', 'Obligation', 'Available_Income_Snapshot', 'Actual Coverage', 'Status']], 
-        use_container_width=True, hide_index=True
-    )
+    # Helper to render table
+    def render_facility_table(dataframe, caption_text=""):
+        st.markdown(f"##### {caption_text}")
+        disp = dataframe.copy()
+        disp['Status'] = disp['Pass_Status'].apply(lambda x: "✅ PASS" if x else "❌ FAIL")
+        disp['Amount'] = disp['Amount'].apply(lambda x: f"Rs.{x:,.0f}")
+        disp['Obligation'] = disp['Obligation'].apply(lambda x: f"Rs.{x:,.0f}")
+        disp['Available_Income_Snapshot'] = disp['Available_Income_Snapshot'].apply(lambda x: f"Rs.{x:,.0f}")
+        disp['Actual Coverage'] = disp['Actual Coverage'].apply(lambda x: f"{x:.2f}x")
+        disp['Effective_Rate'] = disp['Effective_Rate'].apply(lambda x: f"{x:.2f}%")
+        
+        st.dataframe(
+            disp[['Loan Type', 'Amount', 'Effective_Rate', 'Obligation', 'Available_Income_Snapshot', 'Actual Coverage', 'Status']], 
+            use_container_width=True, hide_index=True
+        )
+    
+    st.markdown("### 📋 PORTFOLIO BREAKDOWN")
+    
+    # If custom scenarios exist, iterate and show all. Otherwise show active/baseline.
+    if enable_stress and len(st.session_state.custom_scenarios) > 0:
+        st.info("Displaying breakdowns for all defined scenarios (Priority Allocation applied).")
+        
+        for scen in st.session_state.custom_scenarios:
+            s_name = scen['Name']
+            s_rate = scen['Rate']
+            s_inc_pct = scen['Income']
+            
+            # Recalculate Income for this scenario
+            scen_income = 0.0
+            if inc_mode == "Multiple Sources" and stressed_sources_selection:
+                v_inc = sum(x['Amount'] for x in st.session_state.income_sources if x['Source'] in stressed_sources_selection)
+                f_inc = gross_income - v_inc
+                scen_income = f_inc + (v_inc * (1.0 - (s_inc_pct / 100.0)))
+            else:
+                scen_income = gross_income * (1.0 - (s_inc_pct / 100.0))
+                
+            # Recalculate Obligations
+            temp_df = pd.DataFrame(st.session_state.loans)
+            temp_df[['Obligation', 'Effective_Rate']] = temp_df.apply(lambda x: pd.Series(get_stress_row(x, s_rate)), axis=1)
+            
+            # Run Waterfall
+            scen_res = run_waterfall_allocation(temp_df, scen_income)
+            
+            # Calculate Scenario Aggregate
+            scen_tot_obl = scen_res['Obligation'].sum()
+            scen_agg = scen_income / scen_tot_obl if scen_tot_obl > 0 else 0
+            
+            render_facility_table(scen_res, caption_text=f"Scenario: {s_name} (Aggregate Coverage: {scen_agg:.2f}x)")
+            st.markdown("---")
+            
+    else:
+        # Just show the active/single result calculated above
+        render_facility_table(df_result, caption_text=f"Scenario: {scenario_name}")
 
     # ==========================================
-    # 📄 EXPORT SECTION (REVISED)
+    # 📄 EXPORT SECTION
     # ==========================================
-    st.markdown("---")
     with st.expander("📄 Generate Comprehensive Report", expanded=True):
         st.markdown("Export a detailed PDF report with executive summary and scenario analysis.")
         
-        # Professional 2-Column Layout
         ec1, ec2 = st.columns([3, 1])
-        
         with ec1:
             report_name = st.text_input("Client/Portfolio Name", placeholder="Enter name here (e.g., John Doe - Q1 Review)", label_visibility="collapsed")
         
         with ec2:
-            # Generate Button Logic
             if st.button("🚀 Generate PDF", type="primary", use_container_width=True):
                 if not report_name:
                     st.error("⚠️ Please enter a client name first.")
                 else:
                     with st.spinner("Processing document..."):
-                        # Capture current state for PDF
                         sources_for_pdf = stressed_sources_selection if (inc_mode == "Multiple Sources" and enable_stress) else None
                         
                         pdf_bytes = generate_pdf(
-                            report_name, gross_income, df, overall_pass, tot_prin, income_shortfall,
+                            report_name, gross_income, df_result, overall_pass, tot_prin, income_shortfall,
                             mode_label, scenario_name, stress_rate_val, stress_inc_val,
-                            st.session_state.loans, matrix_data, sources_for_pdf
+                            st.session_state.loans, matrix_data, agg_dti, sources_for_pdf
                         )
                         
-                        # Store in session state to persist the download button
                         st.session_state['generated_pdf'] = pdf_bytes
                         st.session_state['generated_pdf_name'] = f"Report_{report_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
                         
                         st.rerun()
 
-        # Download Button (Only appears after generation)
         if 'generated_pdf' in st.session_state:
             st.markdown("---")
             st.success("✅ Report generated successfully.")
