@@ -83,12 +83,14 @@ st.markdown("""
     [data-testid="stSidebar"] input,
     [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
         background: rgba(255, 255, 255, 0.95) !important;
-        color: #334155 !important; /* Changed from #0f172a (Black) to Slate Grey */
+        color: #334155 !important;
         font-weight: 600;
     }
     
-    /* Buttons - Red Override for Primary */
-    div.stButton > button[kind="primary"] {
+    /* Buttons - Red Override for Primary (FIXED FOR GITHUB/CLOUD) */
+    /* Targeting both kind (legacy) and data-testid (modern/cloud) */
+    div.stButton > button[kind="primary"],
+    div.stButton > button[data-testid="baseButton-primary"] {
         background-color: #ef4444 !important;
         border-color: #ef4444 !important;
         color: white !important;
@@ -96,7 +98,8 @@ st.markdown("""
         font-weight: 600;
         transition: all 0.3s ease;
     }
-    div.stButton > button[kind="primary"]:hover {
+    div.stButton > button[kind="primary"]:hover,
+    div.stButton > button[data-testid="baseButton-primary"]:hover {
         background-color: #dc2626 !important;
         border-color: #dc2626 !important;
     }
@@ -265,7 +268,7 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, 
     pdf.cell(45, 6, "Monthly Income:", 0, 0); pdf.cell(55, 6, f"Rs. {income:,.2f}", 0, 0)
     pdf.cell(45, 6, "Total Exposure:", 0, 0); pdf.cell(0, 6, f"Rs. {exposure:,.2f}", 0, 1)
     
-    # Aggregate DTI Line - Removed "(Income ÷ Obligation)" per request
+    # Aggregate DTI Line
     pdf.cell(45, 6, "Aggregate Coverage:", 0, 0); 
     pdf.set_font("Arial", "B", 10); 
     pdf.cell(0, 6, f"{agg_dti:.2f}x", 0, 1)
@@ -565,7 +568,7 @@ if st.session_state.loans:
     with k2:
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Monthly Obligation</div><div class='metric-value'>Rs.{total_obligation:,.0f}</div></div>", unsafe_allow_html=True)
     with k3:
-        # Aggregate DTI - Removed "Inc ÷ Oblig" text from screen here
+        # Aggregate DTI
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Aggregate Coverage</div><div class='metric-value'>{agg_dti:.2f}x</div></div>", unsafe_allow_html=True)
     with k4:
         delta_class = "metric-delta-negative" if income_shortfall > 0 else "metric-delta-positive"
