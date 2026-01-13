@@ -3,24 +3,10 @@ import pandas as pd
 from fpdf import FPDF
 from datetime import datetime
 import os
+import time
 
 # ==========================================
-# ⚙️ GLOBAL CONFIGURATION
-# ==========================================
-LOAN_CONFIG = {
-    "Personal Term Loan (PTL)": 2.0,       # 50% DTI
-    "Personal OD": 2.0,                    # 50% DTI
-    "Mortgage Loan": 2.0,                  # 50% DTI
-    "Auto Loan": 2.0,                      # 50% DTI
-    "Home Loan": 1.428,                    # 70% DTI
-    "First Time Home Buyer": 1.25,         # 80% DTI
-    "Education Loan": 2.0
-}
-
-DEFAULT_TENURE = {"Personal OD": 1, "Home Loan": 15, "First Time Home Buyer": 20}
-
-# ==========================================
-# 🎨 MODERN PREMIUM THEME & UI SCALING
+# ⚙️ PAGE & THEME CONFIGURATION
 # ==========================================
 st.set_page_config(
     page_title="DTI Analysis Engine", 
@@ -30,43 +16,8 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🔒 AUTHENTICATION LOGIC
+# 🎨 GLOBAL STYLES (Modern Premium)
 # ==========================================
-def check_password():
-    """Returns `True` if the user had a correct password."""
-
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        if st.session_state["password"] == st.secrets["general"]["password"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        # First run, show input for password.
-        st.text_input(
-            "Please enter the access password", type="password", on_change=password_entered, key="password"
-        )
-        return False
-    elif not st.session_state["password_correct"]:
-        # Password not correct, show input + error.
-        st.text_input(
-            "Please enter the access password", type="password", on_change=password_entered, key="password"
-        )
-        st.error("😕 Password incorrect")
-        return False
-    else:
-        # Password correct.
-        return True
-
-if not check_password():
-    st.stop()
-
-# ==========================================
-# 🚀 MAIN APP (LOADS ONLY AFTER AUTH)
-# ==========================================
-
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -78,55 +29,67 @@ st.markdown("""
         letter-spacing: -0.01em;
     }
 
-    /* 90% Zoom / Scaling Effect */
+    /* 90% Zoom / Scaling Effect for Dashboard */
     .block-container {
         max-width: 95% !important;
-        transform: scale(0.90); 
-        transform-origin: top center;
-        width: 111% !important; 
     }
     
     /* Main Background */
     .main { 
         background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
     }
+
+    /* --- LOGIN PAGE SPECIFIC STYLES --- */
+    .login-container {
+        background: white;
+        padding: 3rem;
+        border-radius: 24px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        border: 1px solid #e2e8f0;
+    }
+    .login-header {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        color: #0f172a;
+    }
+    .login-sub {
+        color: #64748b;
+        font-size: 0.95rem;
+        margin-bottom: 2rem;
+    }
     
+    /* Custom Input Styling Override */
+    div[data-testid="stTextInput"] input {
+        border-radius: 12px !important;
+        border: 1px solid #e2e8f0 !important;
+        padding: 1rem !important;
+        font-size: 1rem !important;
+        background: #f8fafc !important;
+        transition: all 0.2s;
+    }
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
+        background: white !important;
+    }
+
+    /* Dashboard Specific Styles (From original code) */
     /* Sidebar Container & Scrollbar Styling */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
         box-shadow: 4px 0 24px rgba(0,0,0,0.12);
     }
-    
-    /* Sidebar Scrollbar Customization */
-    section[data-testid="stSidebar"] ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    section[data-testid="stSidebar"] ::-webkit-scrollbar-track {
-        background: #1e293b; 
-    }
-    section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
-        background: #475569; 
-        border-radius: 4px;
-    }
-    section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
-    }
-    
-    [data-testid="stSidebar"] * {
-        color: #f1f5f9;
-    }
-    
-    /* Sidebar Inputs - Color Changed from Black to Dark Grey */
+    [data-testid="stSidebar"] * { color: #f1f5f9; }
     [data-testid="stSidebar"] input,
     [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
         background: rgba(255, 255, 255, 0.95) !important;
         color: #334155 !important;
         font-weight: 600;
     }
-    
-    /* Buttons - Red Override for Primary (FIXED FOR GITHUB/CLOUD) */
-    /* Targeting both kind (legacy) and data-testid (modern/cloud) */
+
+    /* Buttons */
     div.stButton > button[kind="primary"],
     div.stButton > button[data-testid="baseButton-primary"] {
         background-color: #ef4444 !important;
@@ -150,17 +113,15 @@ st.markdown("""
         border: 1px solid #e2e8f0;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
     }
-    
     .metric-value {
         font-size: 2rem;
         font-weight: 800;
         color: #0f172a;
         font-family: 'JetBrains Mono', monospace;
     }
-    
     .metric-delta-positive { color: #10b981; font-weight: 700; font-size: 0.9rem; }
     .metric-delta-negative { color: #ef4444; font-weight: 700; font-size: 0.9rem; }
-
+    
     /* Status Banners */
     .status-banner {
         padding: 1rem 1.5rem;
@@ -181,7 +142,6 @@ st.markdown("""
         border-radius: 12px;
         margin-bottom: 1.5rem;
     }
-    
     .input-section {
         background: white;
         padding: 2rem;
@@ -192,6 +152,75 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ==========================================
+# 🔒 AUTHENTICATION SYSTEM
+# ==========================================
+def login_ui():
+    """Renders the centered login card UI."""
+    # Hide Sidebar on Login Page
+    st.markdown("""<style>[data-testid="stSidebar"] { display: none; }</style>""", unsafe_allow_html=True)
+    
+    # Center Column Layout
+    cols = st.columns([1, 1.2, 1])
+    
+    with cols[1]:
+        st.markdown("<div style='margin-top: 10vh;'></div>", unsafe_allow_html=True)
+        
+        # Start Card Container
+        with st.container():
+            st.markdown("""
+            <div class='login-container'>
+                <div style='font-size: 3rem; margin-bottom: 1rem;'>📊</div>
+                <div class='login-header'>Welcome Back</div>
+                <div class='login-sub'>Sign in to access the DTI Analysis Engine</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Login Form
+            with st.form("login_form", clear_on_submit=False):
+                username = st.text_input("Username", placeholder="Enter your username")
+                password = st.text_input("Password", type="password", placeholder="Enter your password")
+                
+                st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                submit = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+                
+                if submit:
+                    try:
+                        # Check against Streamlit Secrets
+                        if (username == st.secrets["auth"]["username"] and 
+                            password == st.secrets["auth"]["password"]):
+                            st.session_state['authenticated'] = True
+                            st.success("Access Granted")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error("Invalid credentials")
+                    except Exception as e:
+                        st.error("Secrets not configured correctly")
+
+# Check Auth State
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+
+if not st.session_state['authenticated']:
+    login_ui()
+    st.stop()  # Stop execution here if not logged in
+
+# ==========================================
+# 🚀 MAIN APPLICATION (ONLY RUNS IF AUTHENTICATED)
+# ==========================================
+LOAN_CONFIG = {
+    "Personal Term Loan (PTL)": 2.0,       # 50% DTI
+    "Personal OD": 2.0,                    # 50% DTI
+    "Mortgage Loan": 2.0,                  # 50% DTI
+    "Auto Loan": 2.0,                      # 50% DTI
+    "Home Loan": 1.428,                    # 70% DTI
+    "First Time Home Buyer": 1.25,         # 80% DTI
+    "Education Loan": 2.0
+}
+
+DEFAULT_TENURE = {"Personal OD": 1, "Home Loan": 15, "First Time Home Buyer": 20}
 
 # ==========================================
 # 🧮 CALCULATION HELPERS
@@ -209,55 +238,38 @@ def calculate_obligation(loan_type, principal, rate, tenure):
         except: return 0.0
 
 def run_waterfall_allocation(df, total_income):
-    """
-    PRIORITY LOGIC:
-    1. Sort by Required Multiplier (Highest First).
-    2. Allocate Income sequentially.
-    3. Last item gets remaining income calculation.
-    """
-    # Sort by Multiplier Descending (Highest Priority First)
     df_sorted = df.sort_values(by='Required Multiplier', ascending=False).reset_index(drop=True)
-    
     run_inc = total_income
     pass_flags = []
     act_covs = []
     snaps = []
-    
     num_loans = len(df_sorted)
     
     for idx, row in df_sorted.iterrows():
         obl = row['Obligation']
         req_mult = row['Required Multiplier']
         req_amt = obl * req_mult
-        
         snaps.append(run_inc)
-        
-        # Check if this is the LAST loan in the priority queue
         is_last_loan = (idx == num_loans - 1)
         
         if not is_last_loan:
-            # Standard Allocation
             if run_inc >= req_amt:
-                act_covs.append(req_mult) # Met requirement
+                act_covs.append(req_mult)
                 pass_flags.append(True)
                 run_inc -= req_amt
             else:
-                # Failed intermediate loan
                 actual = run_inc / obl if obl > 0 else 0
                 act_covs.append(actual)
                 pass_flags.append(False)
-                run_inc = 0 # Depleted
+                run_inc = 0
         else:
-            # Final Loan Logic: Calculate using remaining income
             actual = run_inc / obl if obl > 0 else 0
             act_covs.append(actual)
             pass_flags.append(actual >= req_mult)
-            # Income technically remains as is or depletes, doesn't matter for calc
             
     df_sorted['Pass_Status'] = pass_flags
     df_sorted['Actual Coverage'] = act_covs
     df_sorted['Available_Income_Snapshot'] = snaps
-    
     return df_sorted
 
 # ==========================================
@@ -282,7 +294,7 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, 
     pdf = PDFReport()
     pdf.add_page()
     
-    # 1. EXECUTIVE SUMMARY
+    # EXECUTIVE SUMMARY
     pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(15, 23, 42)
     pdf.cell(0, 8, "EXECUTIVE SUMMARY", 0, 1)
@@ -293,7 +305,6 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, 
     pdf.set_font("Arial", "", 10)
     pdf.cell(45, 6, "Client Name:", 0, 0); pdf.set_font("Arial", "B", 10); pdf.cell(145, 6, str(client), 0, 1)
     
-    # Logic for Mode display
     display_mode = mode.upper()
     if "BASELINE" in display_mode or active_s_name == "Baseline (No Stress)":
         display_mode = "NORMAL - STRESS N/A"
@@ -306,7 +317,6 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, 
     pdf.cell(45, 6, "Monthly Income:", 0, 0); pdf.cell(55, 6, f"Rs. {income:,.2f}", 0, 0)
     pdf.cell(45, 6, "Total Exposure:", 0, 0); pdf.cell(0, 6, f"Rs. {exposure:,.2f}", 0, 1)
     
-    # Aggregate DTI Line
     pdf.cell(45, 6, "Aggregate Coverage:", 0, 0); 
     pdf.set_font("Arial", "B", 10); 
     pdf.cell(0, 6, f"{agg_dti:.2f}x", 0, 1)
@@ -317,7 +327,7 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, 
         pdf.cell(45, 6, "Income Shortfall:", 0, 0); pdf.cell(0, 6, f"Rs. {shortfall:,.2f} (CRITICAL DEFICIT)", 0, 1)
         pdf.set_text_color(0,0,0)
 
-    # 2. SCENARIO DETAILS
+    # SCENARIO DETAILS
     pdf.ln(6)
     pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(15, 23, 42)
@@ -348,7 +358,7 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall, 
     pdf.cell(0, 7, f"Assessment Result: {res_text}", 0, 1)
     pdf.set_text_color(0,0,0)
 
-    # 3. PORTFOLIO BREAKDOWN
+    # PORTFOLIO BREAKDOWN
     pdf.ln(6)
     pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(15, 23, 42)
@@ -440,7 +450,6 @@ with st.sidebar:
     stressed_sources_selection = []
     
     if enable_stress:
-        # User requested specific/combination of income stress
         if inc_mode == "Multiple Sources" and len(st.session_state.income_sources) > 0:
             st.markdown("#### Income Stress Scope")
             all_source_names = [x['Source'] for x in st.session_state.income_sources]
@@ -495,7 +504,7 @@ with st.sidebar:
         st.session_state.custom_scenarios = []
         st.rerun()
 
-# --- MAIN DASHBOARD ---
+# --- MAIN DASHBOARD CONTENT ---
 st.title("📊 DTI Analysis Engine")
 st.markdown("Advanced income assessment and scenario analysis for loan portfolios")
 
@@ -539,9 +548,6 @@ if st.session_state.loans:
         st.error("⚠️ Please configure Monthly Gross Income in the sidebar before analyzing portfolio")
         st.stop()
     
-    # -----------------------------
-    # LOGIC 1: Income Calculation
-    # -----------------------------
     eff_income = gross_income
     if enable_stress:
         if inc_mode == "Multiple Sources" and stressed_sources_selection:
@@ -552,9 +558,6 @@ if st.session_state.loans:
         else:
             eff_income = gross_income * (1.0 - (stress_inc_val / 100.0))
     
-    # -----------------------------
-    # LOGIC 2: Base DataFrame Setup
-    # -----------------------------
     df = pd.DataFrame(st.session_state.loans)
     tot_prin = df['Amount'].sum()
     
@@ -563,12 +566,8 @@ if st.session_state.loans:
         new_r = row['Base Rate'] + s_rate
         return calculate_obligation(row['Loan Type'], row['Amount'], new_r, row['Tenure']), new_r
 
-    # Apply ACTIVE scenario params for main view
     df[['Obligation', 'Effective_Rate']] = df.apply(lambda x: pd.Series(get_stress_row(x, stress_rate_val)), axis=1)
     
-    # -----------------------------
-    # LOGIC 3: Waterfall & Aggregates
-    # -----------------------------
     df_result = run_waterfall_allocation(df, eff_income)
     
     total_obligation = df_result['Obligation'].sum()
@@ -577,15 +576,10 @@ if st.session_state.loans:
     
     income_shortfall = 0.0
     if not overall_pass:
-        # Shortfall is tricky in waterfall, but we can approximate by Sum(Oblig * Mult) - Income
         req_ideal = sum(r['Obligation'] * r['Required Multiplier'] for _, r in df_result.iterrows())
         income_shortfall = max(0, req_ideal - eff_income)
 
-    # -----------------------------
-    # UI: Visuals
-    # -----------------------------
-    
-    # Badge
+    # METRICS
     if enable_stress:
         inc_impact_text = ""
         if inc_mode == "Multiple Sources" and stressed_sources_selection:
@@ -599,31 +593,23 @@ if st.session_state.loans:
             <div class='scenario-badge-params'>Interest Rate Impact: +{stress_rate_val:.2f}% | {inc_impact_text}</div>
         </div>""", unsafe_allow_html=True)
     
-    # Metrics
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Total Exposure</div><div class='metric-value'>Rs.{tot_prin:,.0f}</div></div>", unsafe_allow_html=True)
     with k2:
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Monthly Obligation</div><div class='metric-value'>Rs.{total_obligation:,.0f}</div></div>", unsafe_allow_html=True)
     with k3:
-        # Aggregate DTI
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Aggregate Coverage</div><div class='metric-value'>{agg_dti:.2f}x</div></div>", unsafe_allow_html=True)
     with k4:
         delta_class = "metric-delta-negative" if income_shortfall > 0 else "metric-delta-positive"
         delta_text = "Critical Deficit" if income_shortfall > 0 else "Adequate"
         st.markdown(f"<div class='metric-card'><div class='metric-label'>Income Shortfall</div><div class='metric-value'>Rs.{income_shortfall:,.0f}</div><div class='metric-delta {delta_class}'>{delta_text}</div></div>", unsafe_allow_html=True)
 
-    # Status Banner
     if overall_pass:
         st.markdown("<div class='status-banner status-banner-pass'>✅ REQUEST APPROVED - Within Stipulated DTI Requirement</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div class='status-banner status-banner-fail'>⚠️ PORTFOLIO DECLINED - Exceeds Stipulated DTI Requirement</div>", unsafe_allow_html=True)
         
-    # ---------------------------------------------
-    # UI: Multi-Scenario Breakdown (New Feature)
-    # ---------------------------------------------
-    
-    # Helper to render table
     def render_facility_table(dataframe, caption_text=""):
         st.markdown(f"##### {caption_text}")
         disp = dataframe.copy()
@@ -641,16 +627,13 @@ if st.session_state.loans:
     
     st.markdown("### 📋 PORTFOLIO BREAKDOWN")
     
-    # If custom scenarios exist, iterate and show all. Otherwise show active/baseline.
     if enable_stress and len(st.session_state.custom_scenarios) > 0:
         st.info("Displaying breakdowns for all defined scenarios (Priority Allocation applied).")
-        
         for scen in st.session_state.custom_scenarios:
             s_name = scen['Name']
             s_rate = scen['Rate']
             s_inc_pct = scen['Income']
             
-            # Recalculate Income for this scenario
             scen_income = 0.0
             if inc_mode == "Multiple Sources" and stressed_sources_selection:
                 v_inc = sum(x['Amount'] for x in st.session_state.income_sources if x['Source'] in stressed_sources_selection)
@@ -659,34 +642,22 @@ if st.session_state.loans:
             else:
                 scen_income = gross_income * (1.0 - (s_inc_pct / 100.0))
                 
-            # Recalculate Obligations
             temp_df = pd.DataFrame(st.session_state.loans)
             temp_df[['Obligation', 'Effective_Rate']] = temp_df.apply(lambda x: pd.Series(get_stress_row(x, s_rate)), axis=1)
-            
-            # Run Waterfall
             scen_res = run_waterfall_allocation(temp_df, scen_income)
-            
-            # Calculate Scenario Aggregate
             scen_tot_obl = scen_res['Obligation'].sum()
             scen_agg = scen_income / scen_tot_obl if scen_tot_obl > 0 else 0
             
             render_facility_table(scen_res, caption_text=f"Scenario: {s_name} (Aggregate Coverage: {scen_agg:.2f}x)")
             st.markdown("---")
-            
     else:
-        # Just show the active/single result calculated above
         render_facility_table(df_result, caption_text=f"Scenario: {scenario_name}")
 
-    # ==========================================
-    # 📄 EXPORT SECTION
-    # ==========================================
     with st.expander("📄 Generate Comprehensive Report", expanded=True):
         st.markdown("Export a detailed PDF report with executive summary and scenario analysis.")
-        
         ec1, ec2 = st.columns([3, 1])
         with ec1:
             report_name = st.text_input("Client/Portfolio Name", placeholder="Enter name here (e.g., John Doe - Q1 Review)", label_visibility="collapsed")
-        
         with ec2:
             if st.button("🚀 Generate PDF", type="primary", use_container_width=True):
                 if not report_name:
@@ -694,16 +665,13 @@ if st.session_state.loans:
                 else:
                     with st.spinner("Processing document..."):
                         sources_for_pdf = stressed_sources_selection if (inc_mode == "Multiple Sources" and enable_stress) else None
-                        
                         pdf_bytes = generate_pdf(
                             report_name, gross_income, df_result, overall_pass, tot_prin, income_shortfall,
                             mode_label, scenario_name, stress_rate_val, stress_inc_val,
                             st.session_state.loans, matrix_data, agg_dti, sources_for_pdf
                         )
-                        
                         st.session_state['generated_pdf'] = pdf_bytes
                         st.session_state['generated_pdf_name'] = f"Report_{report_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
-                        
                         st.rerun()
 
         if 'generated_pdf' in st.session_state:
