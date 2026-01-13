@@ -29,6 +29,44 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ==========================================
+# 🔒 AUTHENTICATION LOGIC
+# ==========================================
+def check_password():
+    """Returns `True` if the user had a correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if st.session_state["password"] == st.secrets["general"]["password"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # First run, show input for password.
+        st.text_input(
+            "Please enter the access password", type="password", on_change=password_entered, key="password"
+        )
+        return False
+    elif not st.session_state["password_correct"]:
+        # Password not correct, show input + error.
+        st.text_input(
+            "Please enter the access password", type="password", on_change=password_entered, key="password"
+        )
+        st.error("😕 Password incorrect")
+        return False
+    else:
+        # Password correct.
+        return True
+
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 🚀 MAIN APP (LOADS ONLY AFTER AUTH)
+# ==========================================
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
