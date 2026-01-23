@@ -213,14 +213,17 @@ if not st.session_state['authenticated']:
 LOAN_CONFIG = {
     "Personal Term Loan (PTL)": 2.0,       # 50% DTI
     "Personal OD": 2.0,                    # 50% DTI
+    "Share Loan": 2.0,                    # 50% DTI
     "Mortgage Loan": 2.0,                  # 50% DTI
     "Auto Loan": 2.0,                      # 50% DTI
     "Home Loan": 1.428,                    # 70% DTI
     "First Time Home Buyer": 1.25,         # 80% DTI
-    "Education Loan": 2.0
+    "Education Loan": 2.0                    # 50% DTI
+     "Professional OD": 2.0                    # 50% DTI
+     "Professional T/L": 2.0                    # 50% DTI
 }
 
-DEFAULT_TENURE = {"Personal OD": 1, "Home Loan": 15, "First Time Home Buyer": 20}
+DEFAULT_TENURE = {"Personal OD": 1, "Home Loan": 15, "First Time Home Buyer": 20, "Share Loan": 1,"Professional OD":1,"Professional T/L":5}
 
 # ==========================================
 # 🧮 CALCULATION HELPERS
@@ -693,3 +696,4 @@ else:
         <p style='color: #64748b; font-size: 1.1rem;'>Get started by configuring your income sources and adding facilities using the sidebar controls.</p>
     </div>
     """, unsafe_allow_html=True)
+
