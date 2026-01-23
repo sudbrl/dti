@@ -183,7 +183,7 @@ def login_ui():
                 password = st.text_input("Password", type="password", placeholder="Enter your password")
                 
                 st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-                submit = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+                submit = st.form_submit_button("Sign In", type="primary", width='stretch')
                 
                 if submit:
                     try:
@@ -501,7 +501,7 @@ with st.sidebar:
 
     st.markdown("---")
     # Red Button for Reset
-    if st.button("🔄 Reset All Data", type="primary", use_container_width=True):
+    if st.button("🔄 Reset All Data", type="primary", width='stretch'):
         st.session_state.loans = []
         st.session_state.income_sources = []
         st.session_state.custom_scenarios = []
@@ -524,7 +524,7 @@ with st.container():
     with c_opt: use_man = st.checkbox("Use Fixed Monthly Payment (Override EMI Calculation)")
     man_emi = st.number_input("Fixed Monthly Payment (Rs.)", 0.0, step=1000.0) if use_man else 0.0
     
-    if c_btn.button("Add to Portfolio", type="primary", use_container_width=True):
+    if c_btn.button("Add to Portfolio", type="primary", width='stretch'):
         # Validation
         errors = []
         if l_amt <= 0: errors.append("❌ Principal Amount must be greater than 0")
@@ -625,7 +625,7 @@ if st.session_state.loans:
         
         st.dataframe(
             disp[['Loan Type', 'Amount', 'Effective_Rate', 'Obligation', 'Available_Income_Snapshot', 'Actual Coverage', 'Status']], 
-            use_container_width=True, hide_index=True
+            width='stretch', hide_index=True
         )
     
     st.markdown("### 📋 PORTFOLIO BREAKDOWN")
@@ -662,7 +662,7 @@ if st.session_state.loans:
         with ec1:
             report_name = st.text_input("Client/Portfolio Name", placeholder="Enter name here (e.g., John Doe - Q1 Review)", label_visibility="collapsed")
         with ec2:
-            if st.button("🚀 Generate PDF", type="primary", use_container_width=True):
+            if st.button("🚀 Generate PDF", type="primary", width='stretch'):
                 if not report_name:
                     st.error("⚠️ Please enter a client name first.")
                 else:
@@ -686,7 +686,7 @@ if st.session_state.loans:
                 file_name=st.session_state['generated_pdf_name'],
                 mime="application/pdf",
                 type="secondary",
-                use_container_width=True
+                width='stretch'
             )
 
 else:
@@ -696,5 +696,6 @@ else:
         <p style='color: #64748b; font-size: 1.1rem;'>Get started by configuring your income sources and adding facilities using the sidebar controls.</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
