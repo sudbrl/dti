@@ -212,15 +212,15 @@ if not st.session_state['authenticated']:
 # ==========================================
 LOAN_CONFIG = {
     "Personal Term Loan (PTL)": 2.0,       # 50% DTI
-    "Personal OD": 2.0,                    # 50% DTI
-    "Share Loan": 2.0,                    # 50% DTI
+    "Personal OD": 2.0,                     # 50% DTI
+    "Share Loan": 2.0,                     # 50% DTI
     "Mortgage Loan": 2.0,                  # 50% DTI
-    "Auto Loan": 2.0,                      # 50% DTI
+    "Auto Loan": 2.0,                       # 50% DTI
     "Home Loan": 1.428,                    # 70% DTI
     "First Time Home Buyer": 1.25,         # 80% DTI
-    "Education Loan": 2.0,                   # 50% DTI
-     "Professional OD": 2.0,                    # 50% DTI
-     "Professional T/L": 2.0,                    # 50% DTI
+    "Education Loan": 2.0,                    # 50% DTI
+     "Professional OD": 2.0,                     # 50% DTI
+     "Professional T/L": 2.0,                     # 50% DTI
 }
 
 DEFAULT_TENURE = {"Personal OD": 1, "Home Loan": 15, "First Time Home Buyer": 20, "Share Loan": 1,"Professional OD":1,"Professional T/L":5}
@@ -631,6 +631,80 @@ if st.session_state.loans:
     st.markdown("### 📋 PORTFOLIO BREAKDOWN")
     
     if enable_stress and len(st.session_state.custom_scenarios) > 0:
+        # =======================================================
+        # 🆕 NEW SECTION: Scenario Comparison Matrix
+        # =======================================================
+        st.markdown("#### ⚔️ Scenario Stress Test Matrix")
+        st.markdown("Comparative analysis of all defined scenarios against the baseline.")
+        
+        scenario_summary = []
+        
+        # 1. Add Baseline (No Stress) as first row for context
+        # Recalculate baseline income (gross income with no stress)
+        base_income = gross_income
+        base_loans = pd.DataFrame(st.session_state.loans)
+        base_loans[['Obligation', 'Effective_Rate']] = base_loans.apply(lambda x: pd.Series(get_stress_row(x, 0.0)), axis=1)
+        base_res = run_waterfall_allocation(base_loans, base_income)
+        base_obl = base_res['Obligation'].sum()
+        base_cov = base_income / base_obl if base_obl > 0 else 0
+        base_pass = all(base_res['Pass_Status'])
+        
+        scenario_summary.append({
+            "Scenario": "Baseline (Current)",
+            "Rate Shock": "0.00%",
+            "Income Shock": "0.00%",
+            "Stressed Income": f"Rs.{base_income:,.0f}",
+            "Total Obligation": f"Rs.{base_obl:,.0f}",
+            "Agg. Coverage": f"{base_cov:.2f}x",
+            "Result": "✅ PASS" if base_pass else "❌ FAIL"
+        })
+
+        # 2. Iterate through all custom scenarios
+        for scen in st.session_state.custom_scenarios:
+            s_name = scen['Name']
+            s_rate = scen['Rate']
+            s_inc_pct = scen['Income']
+            
+            # Calculate Stressed Income for this specific scenario
+            scen_income = 0.0
+            if inc_mode == "Multiple Sources" and stressed_sources_selection:
+                v_inc = sum(x['Amount'] for x in st.session_state.income_sources if x['Source'] in stressed_sources_selection)
+                f_inc = gross_income - v_inc
+                scen_income = f_inc + (v_inc * (1.0 - (s_inc_pct / 100.0)))
+            else:
+                scen_income = gross_income * (1.0 - (s_inc_pct / 100.0))
+            
+            # Calculate Stressed Obligations
+            temp_df = pd.DataFrame(st.session_state.loans)
+            temp_df[['Obligation', 'Effective_Rate']] = temp_df.apply(lambda x: pd.Series(get_stress_row(x, s_rate)), axis=1)
+            
+            # Run Waterfall
+            scen_res = run_waterfall_allocation(temp_df, scen_income)
+            
+            # Extract Metrics
+            scen_tot_obl = scen_res['Obligation'].sum()
+            scen_agg = scen_income / scen_tot_obl if scen_tot_obl > 0 else 0
+            scen_pass = all(scen_res['Pass_Status'])
+            
+            scenario_summary.append({
+                "Scenario": s_name,
+                "Rate Shock": f"+{s_rate:.2f}%",
+                "Income Shock": f"-{s_inc_pct:.2f}%",
+                "Stressed Income": f"Rs.{scen_income:,.0f}",
+                "Total Obligation": f"Rs.{scen_tot_obl:,.0f}",
+                "Agg. Coverage": f"{scen_agg:.2f}x",
+                "Result": "✅ PASS" if scen_pass else "❌ FAIL"
+            })
+            
+        # Display the Matrix
+        df_matrix = pd.DataFrame(scenario_summary)
+        st.dataframe(df_matrix, use_container_width=True, hide_index=True)
+        st.divider()
+        
+        # =======================================================
+        # EXISTING DETAIL LOOPS
+        # =======================================================
+        
         st.info("Displaying breakdowns for all defined scenarios (Priority Allocation applied).")
         for scen in st.session_state.custom_scenarios:
             s_name = scen['Name']
@@ -696,6 +770,3 @@ else:
         <p style='color: #64748b; font-size: 1.1rem;'>Get started by configuring your income sources and adding facilities using the sidebar controls.</p>
     </div>
     """, unsafe_allow_html=True)
-
-
-
