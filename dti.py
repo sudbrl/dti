@@ -106,16 +106,22 @@ st.markdown("""
 # 📡 SUPABASE LOGGING HELPER
 # ==========================================
 def log_to_supabase(
-    loan_record: dict,
+    loan_type: str,
+    principal: float,
+    interest_rate: float,
+    tenure_years: float,
+    is_manual_payment: bool,
+    monthly_obligation: float,
+    required_multiplier: float,
     gross_income: float,
-    inc_mode: str,
-    available_income_snapshot: float = None,
-    actual_coverage: float = None,
-    pass_status: bool = None,
+    income_mode: str,
+    available_income_snapshot: float,
+    actual_coverage: float,
+    pass_status: bool,
 ):
     """
     Inserts a loan event into Supabase dti_portfolio_log.
-    Only called once per loan with complete waterfall data.
+    All values are passed explicitly to ensure consistency between screen and database.
     """
     try:
         base_url = st.secrets["supabase"]["url"].rstrip("/")
@@ -130,24 +136,19 @@ def log_to_supabase(
         }
 
         payload = {
-            "loan_type":           loan_record["Loan Type"],
-            "principal":           float(loan_record["Amount"]),
-            "interest_rate":       float(loan_record["Base Rate"]),
-            "tenure_years":        float(loan_record["Tenure"]),
-            "is_manual_payment":   bool(loan_record["Is_Manual"]),
-            "monthly_obligation":  float(loan_record["Base_Obligation"]),
-            "required_multiplier": float(loan_record["Required Multiplier"]),
-            "gross_income":        float(gross_income),
-            "income_mode":         str(inc_mode),
+            "loan_type":                  str(loan_type),
+            "principal":                  float(principal),
+            "interest_rate":              float(interest_rate),
+            "tenure_years":               float(tenure_years),
+            "is_manual_payment":          bool(is_manual_payment),
+            "monthly_obligation":         float(monthly_obligation),
+            "required_multiplier":        float(required_multiplier),
+            "gross_income":               float(gross_income),
+            "income_mode":                str(income_mode),
+            "available_income_snapshot":  float(available_income_snapshot),
+            "actual_coverage":            float(actual_coverage),
+            "pass_status":                bool(pass_status),
         }
-
-        # Only include waterfall fields when values are supplied
-        if available_income_snapshot is not None:
-            payload["available_income_snapshot"] = float(available_income_snapshot)
-        if actual_coverage is not None:
-            payload["actual_coverage"] = float(actual_coverage)
-        if pass_status is not None:
-            payload["pass_status"] = bool(pass_status)
 
         resp = requests.post(endpoint, headers=headers, data=json.dumps(payload), timeout=8)
 
@@ -436,8 +437,7 @@ if 'income_sources' not in st.session_state:
     st.session_state.income_sources = []
 if 'custom_scenarios' not in st.session_state:
     st.session_state.custom_scenarios = []
-# Track which loan indices have already been logged to Supabase
-# to avoid duplicate entries on every re-render
+# Track which loan IDs have already been logged to Supabase
 if 'logged_loan_ids' not in st.session_state:
     st.session_state.logged_loan_ids = set()
 # Counter to assign unique IDs to each loan
@@ -591,12 +591,9 @@ with st.container():
                 "Base_Obligation":    man_emi if use_man else std,
                 "Required Multiplier": LOAN_CONFIG[l_type],
                 "Is_Manual": use_man,
-                "_loan_id": loan_id,  # Internal tracking ID
+                "_loan_id": loan_id,
             }
             st.session_state.loans.append(new_loan)
-
-            # NOTE: We NO LONGER log here on add.
-            # Logging happens ONLY after waterfall allocation to prevent duplicates.
 
             st.success(f"✅ Added {l_type} to portfolio")
             st.rerun()
@@ -639,27 +636,28 @@ if st.session_state.loans:
 
     df_result = run_waterfall_allocation(df, eff_income)
 
-    # ── SINGLE LOG: Push waterfall results for each loan (only once per loan) ──
-    # We use the unique _loan_id to track which loans have already been logged.
+    # ── LOG TO SUPABASE: Use EXACT values from df_result (same as displayed on screen) ──
     for _, wf_row in df_result.iterrows():
         loan_id = wf_row.get('_loan_id')
         if loan_id is not None and loan_id not in st.session_state.logged_loan_ids:
-            # Find the original loan record
-            matching_loan = next(
-                (l for l in st.session_state.loans if l.get("_loan_id") == loan_id),
-                None
+            # Log using values directly from the waterfall result row
+            # This ensures Supabase values match exactly what's shown on screen
+            log_to_supabase(
+                loan_type=wf_row['Loan Type'],
+                principal=wf_row['Amount'],
+                interest_rate=wf_row['Effective_Rate'],  # Use effective (stressed) rate
+                tenure_years=wf_row['Tenure'],
+                is_manual_payment=wf_row['Is_Manual'],
+                monthly_obligation=wf_row['Obligation'],  # Use calculated obligation (stressed)
+                required_multiplier=wf_row['Required Multiplier'],
+                gross_income=gross_income,
+                income_mode=inc_mode,
+                available_income_snapshot=wf_row['Available_Income_Snapshot'],
+                actual_coverage=wf_row['Actual Coverage'],
+                pass_status=bool(wf_row['Pass_Status']),
             )
-            if matching_loan:
-                log_to_supabase(
-                    matching_loan,
-                    gross_income,
-                    inc_mode,
-                    available_income_snapshot=wf_row["Available_Income_Snapshot"],
-                    actual_coverage=wf_row["Actual Coverage"],
-                    pass_status=bool(wf_row["Pass_Status"]),
-                )
-                # Mark this loan as logged
-                st.session_state.logged_loan_ids.add(loan_id)
+            # Mark this loan as logged
+            st.session_state.logged_loan_ids.add(loan_id)
 
     # ── KPIs ──────────────────────────────────────────────────────────────
     total_obligation = df_result['Obligation'].sum()
