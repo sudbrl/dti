@@ -161,31 +161,47 @@ st.markdown("""
 def log_to_supabase(loan_record: dict, gross_income: float, inc_mode: str):
     """Inserts a loan addition event into Supabase dti_portfolio_log table."""
     try:
-        supabase_url = st.secrets["supabase"]["url"] + "/rest/v1/dti_portfolio_log"
+        base_url = st.secrets["supabase"]["url"].rstrip("/")
+        api_key  = st.secrets["supabase"]["key"]
+        endpoint = f"{base_url}/rest/v1/dti_portfolio_log"
+
         headers = {
-            "apikey": st.secrets["supabase"]["key"],
-            "Authorization": f"Bearer {st.secrets['supabase']['key']}",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal"
+            "apikey":        api_key,
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type":  "application/json",
+            "Prefer":        "return=representation",   # return inserted row so we can confirm
         }
         payload = {
-            "loan_type":          loan_record["Loan Type"],
-            "principal":          loan_record["Amount"],
-            "interest_rate":      loan_record["Base Rate"],
-            "tenure_years":       loan_record["Tenure"],
-            "is_manual_payment":  loan_record["Is_Manual"],
-            "monthly_obligation": loan_record["Base_Obligation"],
-            "required_multiplier": loan_record["Required Multiplier"],
-            "gross_income":       gross_income,
-            "income_mode":        inc_mode,
+            "loan_type":           loan_record["Loan Type"],
+            "principal":           float(loan_record["Amount"]),
+            "interest_rate":       float(loan_record["Base Rate"]),
+            "tenure_years":        float(loan_record["Tenure"]),
+            "is_manual_payment":   bool(loan_record["Is_Manual"]),
+            "monthly_obligation":  float(loan_record["Base_Obligation"]),
+            "required_multiplier": float(loan_record["Required Multiplier"]),
+            "gross_income":        float(gross_income),
+            "income_mode":         str(inc_mode),
         }
-        resp = requests.post(supabase_url, headers=headers, data=json.dumps(payload), timeout=5)
-        if resp.status_code not in (200, 201):
-            st.warning(f"⚠️ Supabase log failed [{resp.status_code}]: {resp.text}")
-    except KeyError:
-        st.warning("⚠️ Supabase secrets not configured. Add [supabase] url & key to secrets.toml.")
+
+        resp = requests.post(endpoint, headers=headers, data=json.dumps(payload), timeout=8)
+
+        if resp.status_code in (200, 201):
+            st.toast("📡 Logged to Supabase ✅", icon="✅")
+        else:
+            # Show the full response so we know exactly what Supabase rejected
+            st.warning(
+                f"⚠️ Supabase insert failed [{resp.status_code}]\n\n"
+                f"**URL:** `{endpoint}`\n\n"
+                f"**Payload:** `{json.dumps(payload)}`\n\n"
+                f"**Response:** `{resp.text}`"
+            )
+
+    except KeyError as e:
+        st.error(f"⚠️ Missing Supabase secret key: {e}. Check your secrets.toml.")
+    except requests.exceptions.ConnectionError as e:
+        st.error(f"⚠️ Could not reach Supabase — check the URL in secrets.toml.\n\n`{e}`")
     except Exception as e:
-        st.warning(f"⚠️ Could not log to Supabase: {e}")
+        st.error(f"⚠️ Unexpected error logging to Supabase: {type(e).__name__}: {e}")
 
 
 # ==========================================
