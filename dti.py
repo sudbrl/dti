@@ -115,10 +115,7 @@ def log_to_supabase(
 ):
     """
     Inserts a loan event into Supabase dti_portfolio_log.
-
-    Phase 1 (on Add): call without the last 3 args — they default to None
-                      and are omitted from the payload so the columns stay NULL.
-    Phase 2 (post-waterfall): call with all 3 waterfall result args populated.
+    Only called once per loan with complete waterfall data.
     """
     try:
         base_url = st.secrets["supabase"]["url"].rstrip("/")
@@ -439,10 +436,13 @@ if 'income_sources' not in st.session_state:
     st.session_state.income_sources = []
 if 'custom_scenarios' not in st.session_state:
     st.session_state.custom_scenarios = []
-# Track which loan indices have already had their waterfall results logged
-# to avoid duplicate Phase-2 logs on every re-render
-if 'waterfall_logged_hashes' not in st.session_state:
-    st.session_state.waterfall_logged_hashes = set()
+# Track which loan indices have already been logged to Supabase
+# to avoid duplicate entries on every re-render
+if 'logged_loan_ids' not in st.session_state:
+    st.session_state.logged_loan_ids = set()
+# Counter to assign unique IDs to each loan
+if 'loan_id_counter' not in st.session_state:
+    st.session_state.loan_id_counter = 0
 
 
 # ==========================================
@@ -543,7 +543,8 @@ with st.sidebar:
         st.session_state.loans = []
         st.session_state.income_sources = []
         st.session_state.custom_scenarios = []
-        st.session_state.waterfall_logged_hashes = set()
+        st.session_state.logged_loan_ids = set()
+        st.session_state.loan_id_counter = 0
         st.rerun()
 
 
@@ -578,6 +579,10 @@ with st.container():
             for e in errors: st.error(e)
         else:
             std = calculate_obligation(l_type, l_amt, l_rate, l_ten)
+            # Assign a unique ID to this loan for tracking
+            loan_id = st.session_state.loan_id_counter
+            st.session_state.loan_id_counter += 1
+            
             new_loan = {
                 "Loan Type": l_type,
                 "Amount":    l_amt,
@@ -586,11 +591,12 @@ with st.container():
                 "Base_Obligation":    man_emi if use_man else std,
                 "Required Multiplier": LOAN_CONFIG[l_type],
                 "Is_Manual": use_man,
+                "_loan_id": loan_id,  # Internal tracking ID
             }
             st.session_state.loans.append(new_loan)
 
-            # ── PHASE 1 LOG: core loan details, no waterfall data yet ──────
-            log_to_supabase(new_loan, gross_income, inc_mode)
+            # NOTE: We NO LONGER log here on add.
+            # Logging happens ONLY after waterfall allocation to prevent duplicates.
 
             st.success(f"✅ Added {l_type} to portfolio")
             st.rerun()
@@ -633,17 +639,14 @@ if st.session_state.loans:
 
     df_result = run_waterfall_allocation(df, eff_income)
 
-    # ── PHASE 2 LOG: push waterfall results for each loan ─────────────────
-    # Use a stable hash (loan_type + amount + stress config) to avoid
-    # re-logging on every Streamlit re-render.
-    stress_key = f"{stress_rate_val}_{stress_inc_val}_{scenario_name}"
+    # ── SINGLE LOG: Push waterfall results for each loan (only once per loan) ──
+    # We use the unique _loan_id to track which loans have already been logged.
     for _, wf_row in df_result.iterrows():
-        row_hash = f"{wf_row['Loan Type']}_{wf_row['Amount']}_{stress_key}"
-        if row_hash not in st.session_state.waterfall_logged_hashes:
+        loan_id = wf_row.get('_loan_id')
+        if loan_id is not None and loan_id not in st.session_state.logged_loan_ids:
+            # Find the original loan record
             matching_loan = next(
-                (l for l in st.session_state.loans
-                 if l["Loan Type"] == wf_row["Loan Type"]
-                 and l["Amount"]    == wf_row["Amount"]),
+                (l for l in st.session_state.loans if l.get("_loan_id") == loan_id),
                 None
             )
             if matching_loan:
@@ -655,7 +658,8 @@ if st.session_state.loans:
                     actual_coverage=wf_row["Actual Coverage"],
                     pass_status=bool(wf_row["Pass_Status"]),
                 )
-            st.session_state.waterfall_logged_hashes.add(row_hash)
+                # Mark this loan as logged
+                st.session_state.logged_loan_ids.add(loan_id)
 
     # ── KPIs ──────────────────────────────────────────────────────────────
     total_obligation = df_result['Obligation'].sum()
