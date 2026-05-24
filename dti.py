@@ -559,6 +559,47 @@ with st.sidebar:
 st.title("📊 DTI Analysis Engine")
 st.markdown("Advanced income assessment and scenario analysis for loan portfolios")
 
+# SUPABASE DEBUG (remove once working)
+with st.expander("Supabase Connection Test", expanded=False):
+    if st.button("Run Connection Test"):
+        try:
+            base_url = st.secrets["supabase"]["url"].rstrip("/")
+            api_key  = st.secrets["supabase"]["key"]
+            st.write(f"**URL in secrets:** `{base_url}`")
+            st.write(f"**Key (first 20 chars):** `{api_key[:20]}...`")
+            endpoint = f"{base_url}/rest/v1/dti_portfolio_log"
+            headers  = {
+                "apikey":        api_key,
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type":  "application/json",
+                "Prefer":        "return=representation",
+            }
+            test_payload = {
+                "loan_type":           "TEST",
+                "principal":           1.0,
+                "interest_rate":       1.0,
+                "tenure_years":        1.0,
+                "is_manual_payment":   False,
+                "monthly_obligation":  1.0,
+                "required_multiplier": 2.0,
+                "gross_income":        1.0,
+                "income_mode":         "Test",
+            }
+            st.write(f"**Posting to:** `{endpoint}`")
+            st.write(f"**Payload:** `{json.dumps(test_payload)}`")
+            resp = requests.post(endpoint, headers=headers, data=json.dumps(test_payload), timeout=8)
+            st.write(f"**HTTP Status:** `{resp.status_code}`")
+            st.write(f"**Response body:** `{resp.text}`")
+            st.write(f"**Response headers:** `{dict(resp.headers)}`")
+            if resp.status_code in (200, 201):
+                st.success("Insert succeeded - check your Supabase table now.")
+            else:
+                st.error("Insert failed - see status and body above.")
+        except KeyError as e:
+            st.error(f"Missing secret: {e}")
+        except Exception as e:
+            st.error(f"{type(e).__name__}: {e}")
+
 # FACILITY INPUT SECTION
 with st.container():
     st.markdown("<div class='input-section'><h5>➕ Add New Facility</h5>", unsafe_allow_html=True)
