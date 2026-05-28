@@ -119,35 +119,33 @@ def log_to_supabase(
     actual_coverage: float,
     pass_status: bool,
 ):
-    """
-    Inserts a loan event into Supabase dti_portfolio_log.
-    All values are passed explicitly to ensure consistency between screen and database.
-    """
     try:
         base_url = st.secrets["supabase"]["url"].rstrip("/")
         api_key  = st.secrets["supabase"]["key"]
         endpoint = f"{base_url}/rest/v1/dti_portfolio_log"
 
         headers = {
-            "apikey":        api_key,
+            "apikey": api_key,
             "Authorization": f"Bearer {api_key}",
-            "Content-Type":  "application/json",
-            "Prefer":        "return=representation",
+            "Content-Type": "application/json",
+
+            # ✅ IMPORTANT FIX
+            "Prefer": "return=minimal",
         }
 
         payload = {
-            "loan_type":                  str(loan_type),
-            "principal":                  float(principal),
-            "interest_rate":              float(interest_rate),
-            "tenure_years":               float(tenure_years),
-            "is_manual_payment":          bool(is_manual_payment),
-            "monthly_obligation":         float(monthly_obligation),
-            "required_multiplier":        float(required_multiplier),
-            "gross_income":               float(gross_income),
-            "income_mode":                str(income_mode),
-            "available_income_snapshot":  float(available_income_snapshot),
-            "actual_coverage":            float(actual_coverage),
-            "pass_status":                bool(pass_status),
+            "loan_type": loan_type,
+            "principal": principal,
+            "interest_rate": interest_rate,
+            "tenure_years": tenure_years,
+            "is_manual_payment": is_manual_payment,
+            "monthly_obligation": monthly_obligation,
+            "required_multiplier": required_multiplier,
+            "gross_income": gross_income,
+            "income_mode": income_mode,
+            "available_income_snapshot": available_income_snapshot,
+            "actual_coverage": actual_coverage,
+            "pass_status": pass_status,
         }
 
         resp = requests.post(endpoint, headers=headers, data=json.dumps(payload), timeout=8)
@@ -155,20 +153,10 @@ def log_to_supabase(
         if resp.status_code in (200, 201):
             st.toast("📡 Logged to Supabase ✅", icon="✅")
         else:
-            st.warning(
-                f"⚠️ Supabase insert failed [{resp.status_code}]\n\n"
-                f"**URL:** `{endpoint}`\n\n"
-                f"**Payload:** `{json.dumps(payload)}`\n\n"
-                f"**Response:** `{resp.text}`"
-            )
+            st.warning(f"Supabase insert failed [{resp.status_code}] → {resp.text}")
 
-    except KeyError as e:
-        st.error(f"⚠️ Missing Supabase secret key: {e}. Check your secrets.toml.")
-    except requests.exceptions.ConnectionError as e:
-        st.error(f"⚠️ Could not reach Supabase — check the URL in secrets.toml.\n\n`{e}`")
     except Exception as e:
-        st.error(f"⚠️ Unexpected error logging to Supabase: {type(e).__name__}: {e}")
-
+        st.error(f"Supabase logging error: {type(e).__name__}: {e}")
 
 # ==========================================
 # 🔒 AUTHENTICATION SYSTEM
