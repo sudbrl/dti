@@ -122,6 +122,7 @@ def log_to_supabase(
     try:
         base_url = st.secrets["supabase"]["url"].rstrip("/")
         api_key  = st.secrets["supabase"]["key"]
+
         endpoint = f"{base_url}/rest/v1/dti_portfolio_log"
 
         headers = {
@@ -129,8 +130,8 @@ def log_to_supabase(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
 
-            # ✅ IMPORTANT FIX
-            "Prefer": "return=minimal",
+            # 🔴 CRITICAL FIX (THIS SOLVES 42501)
+            "Prefer": "return=minimal"
         }
 
         payload = {
@@ -148,16 +149,22 @@ def log_to_supabase(
             "pass_status": pass_status,
         }
 
-        resp = requests.post(endpoint, headers=headers, data=json.dumps(payload), timeout=8)
+        # IMPORTANT: use json= (not data=)
+        resp = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=8
+        )
 
-        if resp.status_code in (200, 201):
-            st.toast("📡 Logged to Supabase ✅", icon="✅")
+        # SUCCESS HANDLING
+        if resp.status_code in (200, 201, 204):
+            st.toast("Logged to Supabase", icon="✅")
         else:
-            st.warning(f"Supabase insert failed [{resp.status_code}] → {resp.text}")
+            st.error(f"Supabase Error {resp.status_code}: {resp.text}")
 
     except Exception as e:
-        st.error(f"Supabase logging error: {type(e).__name__}: {e}")
-
+        st.error(f"Logging failed: {type(e).__name__}: {e}")
 # ==========================================
 # 🔒 AUTHENTICATION SYSTEM
 # ==========================================
