@@ -152,15 +152,11 @@ def log_to_supabase(
 
         resp = requests.post(endpoint, headers=headers, data=json.dumps(payload), timeout=8)
 
-       if resp.status_code in (200, 201):
-    st.toast("📡 Logged to Supabase ✅", icon="✅")
-else:
-    st.warning(
-        f"⚠️ Supabase insert failed [{resp.status_code}]\n\n"
-        f"**URL:** `{endpoint}`\n\n"
-        f"**Payload:** `{json.dumps(payload)}`\n\n"
-        f"**Response:** `{resp.text}`"
-    )
+      if resp.status_code in (200, 201):
+            st.toast("📡 Logged to Supabase ✅", icon="✅")
+        else:
+            print(f"[Supabase error] status={resp.status_code} response={resp.text}")
+            st.warning("⚠️ Could not save to database. Please contact admin.")
 
     except KeyError as e:
         st.error(f"⚠️ Missing Supabase secret key: {e}. Check your secrets.toml.")
