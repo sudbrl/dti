@@ -159,7 +159,7 @@ def log_to_supabase(
 
         # SUCCESS HANDLING
         if resp.status_code in (200, 201, 204):
-            st.toast("Logged to Supabase", icon="✅")
+            st.toast("Logged to Database", icon="✅")
         else:
             st.error(f"Supabase Error {resp.status_code}: {resp.text}")
 
