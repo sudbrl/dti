@@ -158,13 +158,13 @@ def log_to_supabase(
         )
 
         # SUCCESS HANDLING
+        try
         if resp.status_code in (200, 201, 204):
            pass
     else:
     st.error("Database error: Unable to save data to Server.")
+else:
 
-    except Exception as e:
-        st.error(f"Logging failed: {type(e).__name__}: {e}")
 # ==========================================
 # 🔒 AUTHENTICATION SYSTEM
 # ==========================================
