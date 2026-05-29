@@ -159,9 +159,9 @@ def log_to_supabase(
 
         # SUCCESS HANDLING
         if resp.status_code in (200, 201, 204):
-            st.toast("Logged to Supabase", icon="✅")
-        else:
-            st.error(f"Supabase Error {resp.status_code}: {resp.text}")
+           pass
+    else:
+    st.error("Database error: Unable to save data to Server.")
 
     except Exception as e:
         st.error(f"Logging failed: {type(e).__name__}: {e}")
