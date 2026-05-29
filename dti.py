@@ -156,14 +156,15 @@ def log_to_supabase(
             json=payload,
             timeout=8
         )
-# SUCCESS / ERROR HANDLING
-try:
-    if resp is None:
-        st.error("Database error: No response received from server.")
-    elif resp.status_code not in (200, 201, 204):
-        st.error(f"Database error: HTTP {resp.status_code}")
-except Exception as e:
-    st.error(f"Unexpected error while communicating with database: {str(e)}")
+
+        # SUCCESS HANDLING
+        if resp.status_code in (200, 201, 204):
+            st.toast("Logged to Supabase", icon="✅")
+        else:
+            st.error(f"Supabase Error {resp.status_code}: {resp.text}")
+
+    except Exception as e:
+        st.error(f"Logging failed: {type(e).__name__}: {e}")
 # ==========================================
 # 🔒 AUTHENTICATION SYSTEM
 # ==========================================
