@@ -156,15 +156,13 @@ def log_to_supabase(
             json=payload,
             timeout=8
         )
+# SUCCESS HANDLING
+try:
+    if resp.status_code not in (200, 201, 204):
+        st.error("Database error: Unable to save data to Server.")
 
-        # SUCCESS HANDLING
-        try
-        if resp.status_code in (200, 201, 204):
-           pass
-    else:
-    st.error("Database error: Unable to save data to Server.")
-else:
-
+except Exception as e:
+    st.error(f"Connection error: {e}")
 # ==========================================
 # 🔒 AUTHENTICATION SYSTEM
 # ==========================================
