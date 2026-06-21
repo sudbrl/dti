@@ -82,12 +82,12 @@ st.markdown("""
     .metric-delta-positive { color: #10b981; font-weight: 700; font-size: 0.9rem; }
     .metric-delta-negative { color: #ef4444; font-weight: 700; font-size: 0.9rem; }
 
-    .-banner {
+    .status-banner {
         padding: 1rem 1.5rem; border-radius: 12px; font-weight: 700;
         font-size: 1rem; text-align: center; margin: 1.5rem 0;
     }
-    .-banner-pass { background: #d1fae5; border: 2px solid #10b981; color: #065f46; }
-    .-banner-fail { background: #fee2e2; border: 2px solid #ef4444; color: #991b1b; }
+    .status-banner-pass { background: #d1fae5; border: 2px solid #10b981; color: #065f46; }
+    .status-banner-fail { background: #fee2e2; border: 2px solid #ef4444; color: #991b1b; }
 
     .scenario-badge {
         background: #dbeafe; border-left: 4px solid #3b82f6;
@@ -117,7 +117,7 @@ def log_to_supabase(
     income_mode: str,
     available_income_snapshot: float,
     actual_coverage: float,
-    pass_: bool,
+    pass_status: bool,
 ):
     try:
         base_url = st.secrets["supabase"]["url"].rstrip("/")
@@ -146,7 +146,7 @@ def log_to_supabase(
             "income_mode": income_mode,
             "available_income_snapshot": available_income_snapshot,
             "actual_coverage": actual_coverage,
-            "pass_": pass_,
+            "pass_status": pass_status,
         }
 
         # IMPORTANT: use json= (not data=)
@@ -158,10 +158,10 @@ def log_to_supabase(
         )
 
         # SUCCESS HANDLING
-        if resp._code in (200, 201, 204):
+        if resp.status_code in (200, 201, 204):
             st.toast("Logged to Database", icon="✅")
         else:
-            st.error(f"Supabase Error {resp._code}: {resp.text}")
+            st.error(f"Supabase Error {resp.status_code}: {resp.text}")
 
     except Exception as e:
         st.error(f"Logging failed: {type(e).__name__}: {e}")
@@ -276,7 +276,7 @@ def run_waterfall_allocation(df, total_income):
             act_covs.append(actual)
             pass_flags.append(actual >= req_mult)
 
-    df_sorted['Pass_'] = pass_flags
+    df_sorted['Pass_Status'] = pass_flags
     df_sorted['Actual Coverage'] = act_covs
     df_sorted['Available_Income_Snapshot'] = snaps
     return df_sorted
