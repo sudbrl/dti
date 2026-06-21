@@ -428,7 +428,7 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
         GUTTER = 1.2
 
         def draw_income_header():
-            pdf.set_font('Helvetica', 'B', 7.6)
+            pdf.set_font('Helvetica', 'B', 7.3)
             pdf.set_text_color(*BLACK)
             pdf.set_draw_color(0, 0, 0)
             pdf.set_line_width(0.35)
@@ -448,14 +448,15 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
 
         pdf.set_font('Helvetica', '', 8.6)
         total_src_amount = 0.0
-        for idx, src in enumerate(income_sources_list):
+        row_idx = 0
+        for src in income_sources_list:
             if pdf.get_y() + src_row_h > 277:
                 pdf.add_page()
                 draw_income_header()
                 pdf.set_font('Helvetica', '', 8.6)
 
             y0 = pdf.get_y()
-            if idx % 2 == 0:
+            if row_idx % 2 == 0:
                 pdf.set_fill_color(*ZEBRA)
                 pdf.rect(MARGIN, y0, CONTENT_W, src_row_h, style='F')
 
@@ -472,19 +473,21 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
             pdf.set_line_width(0.15)
             pdf.line(MARGIN, y0 + src_row_h, MARGIN + CONTENT_W, y0 + src_row_h)
             pdf.set_y(y0 + src_row_h)
+            row_idx += 1
 
-        # ── Total row ──
+        # ── Total row (styled as a continuation row, matching Priority Allocation Breakdown) ──
         y0 = pdf.get_y()
-        pdf.set_fill_color(238, 238, 238)
-        pdf.rect(MARGIN, y0, CONTENT_W, src_row_h, style='F')
-        pdf.set_draw_color(0, 0, 0)
-        pdf.set_line_width(0.35)
-        pdf.line(MARGIN, y0, MARGIN + CONTENT_W, y0)
+        if row_idx % 2 == 0:
+            pdf.set_fill_color(*ZEBRA)
+            pdf.rect(MARGIN, y0, CONTENT_W, src_row_h, style='F')
         pdf.set_font('Helvetica', 'B', 8.6)
+        pdf.set_text_color(*BLACK)
         pdf.set_xy(MARGIN, y0 + 0.8)
         pdf.cell(src_col_w[0] - GUTTER, src_row_h - 1.6, "TOTAL", 0, 0, 'L')
         pdf.set_xy(MARGIN + src_col_w[0], y0 + 0.8)
         pdf.cell(src_col_w[1] - GUTTER, src_row_h - 1.6, f"{total_src_amount:,.2f}", 0, 0, 'R')
+        pdf.set_draw_color(*GREY_RL)
+        pdf.set_line_width(0.15)
         pdf.line(MARGIN, y0 + src_row_h, MARGIN + CONTENT_W, y0 + src_row_h)
         pdf.set_y(y0 + src_row_h + 4)
         pdf.set_font('Helvetica', '', 9.5)
