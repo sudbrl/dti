@@ -531,7 +531,7 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
 
     col_w = [44, 24, 24, 25, 22, 22, 21]
     headers = ["FACILITY TYPE", "PRINCIPAL (RS.)", "PAYMENT (RS.)", "REM. INCOME",
-               "ACTUAL COV.", "REQUIRED COV.", "STAT."]
+               "ACTUAL COV.", "REQUIRED COV.", "STATUS"]
     aligns  = ['L', 'R', 'R', 'R', 'R', 'R', 'C']
     row_h = 7
     GUTTER = 1.2
