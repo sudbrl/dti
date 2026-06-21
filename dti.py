@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-from weasyprint import HTML
-from html import escape as esc
+from fpdf import FPDF
 from datetime import datetime
 import os
 import time
@@ -287,174 +286,242 @@ def run_waterfall_allocation(df, total_income):
 # 📄 PDF ENGINE
 # ==========================================
 
-_PDF_CSS = """
-@page {
-    size: A4;
-    margin: 16mm 14mm 18mm 14mm;
-    @bottom-left   { content: "DTI Analysis Engine"; font-size: 7.5pt; color: #666666; }
-    @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 7.5pt; color: #666666; }
-    @bottom-right  { content: "__DATE_STR__"; font-size: 7.5pt; color: #666666; }
-}
-* { box-sizing: border-box; }
-body {
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: 9pt;
-    color: #1a1a1a;
-    line-height: 1.35;
-}
-h1 { font-size: 15pt; margin: 0 0 4px 0; text-transform: uppercase; color: #002060; letter-spacing: 0.4px; }
-h2 { font-size: 10.5pt; margin: 0 0 14px 0; color: #444444; font-weight: normal; border-bottom: 1px solid #000; padding-bottom: 6px; }
-h3 { font-size: 10pt; margin: 18px 0 8px 0; color: #002060; text-transform: uppercase; letter-spacing: 0.3px;
-     border-bottom: 1px solid #cccccc; padding-bottom: 3px; }
+# ── Palette (matches the classic-corporate theme) ──
+NAVY    = (0, 32, 96)
+BLACK   = (26, 26, 26)
+GREY_TX = (102, 102, 102)
+GREY_RL = (204, 204, 204)
+ZEBRA   = (248, 248, 250)
+GREEN   = (26, 122, 26)
+RED     = (176, 0, 0)
 
-.header-table { width: 100%; margin-bottom: 16px; }
-.header-table td { vertical-align: top; font-size: 9pt; }
+PAGE_W      = 210
+MARGIN      = 14
+CONTENT_W   = PAGE_W - 2 * MARGIN  # 182mm
 
-.summary-box { border: 1px solid #000; padding: 10px 14px; margin-bottom: 6px; background: #fbfbfb; }
-.status-line { font-weight: bold; font-size: 9.5pt; margin-bottom: 10px; }
-.status-pass { color: #1a7a1a; }
-.status-fail { color: #b00000; }
-.kv-table { width: 62%; font-size: 9pt; border-collapse: collapse; }
-.kv-table td { padding: 2px 0; }
-.kv-table td.kv-value { text-align: right; }
-.kv-table tr.kv-total td { font-weight: bold; padding-top: 6px; border-top: 1px solid #ccc; }
 
-table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; table-layout: fixed; }
-table.data-table thead { display: table-header-group; }
-table.data-table tr { page-break-inside: avoid; }
-table.data-table th, table.data-table td { padding: 5px 7px; text-align: left; vertical-align: middle; }
-table.data-table th { border-top: 1.4px solid #000; border-bottom: 1.4px solid #000; font-weight: bold;
-                       font-size: 7.6pt; text-transform: uppercase; letter-spacing: 0.2px; }
-table.data-table td { border-bottom: 0.75px solid #e3e3e3; font-size: 8.6pt; }
-table.data-table td.center { white-space: nowrap; }
-table.data-table tbody tr:nth-child(even) td { background: #f8f8fa; }
-table.data-table tr.aggregate-row td { border-top: 1.4px solid #000; border-bottom: 1.4px solid #000;
-                                        font-weight: bold; background: #eeeeee !important; }
+def _safe(text):
+    """fpdf2 core fonts (Helvetica) are latin-1 only; normalize/sanitize to avoid crashes."""
+    if not isinstance(text, str):
+        text = str(text)
+    char_map = {
+        '\u2014': '-', '\u2013': '-', '\u2018': "'", '\u2019': "'",
+        '\u201c': '"', '\u201d': '"', '\u00a0': ' ', '\u2026': '...',
+        '\u20b9': 'Rs.', '\u2022': '*',
+    }
+    for ch, rep in char_map.items():
+        text = text.replace(ch, rep)
+    return ''.join((ch if _is_latin1(ch) else '?') for ch in text)
 
-.right  { text-align: right !important; }
-.center { text-align: center !important; }
-.muted  { color: #777777; }
-.pass   { color: #1a7a1a; font-weight: bold; }
-.fail   { color: #b00000; font-weight: bold; }
 
-.note { margin-top: 8px; font-size: 7.8pt; color: #666666; font-style: italic; }
-"""
+def _is_latin1(ch):
+    try:
+        ch.encode('latin-1')
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+class DTIPDFReport(FPDF):
+    def footer(self):
+        self.set_y(-15)
+        self.set_draw_color(*GREY_RL)
+        self.set_line_width(0.2)
+        self.line(MARGIN, self.get_y(), PAGE_W - MARGIN, self.get_y())
+        self.ln(2)
+        self.set_font('Helvetica', 'I', 7.5)
+        self.set_text_color(*GREY_TX)
+        self.cell(60, 8, 'DTI Analysis Engine', 0, 0, 'L')
+        self.cell(CONTENT_W - 120, 8, f'Page {self.page_no()} of {{nb}}', 0, 0, 'C')
+        self.cell(60, 8, datetime.now().strftime("%B %d, %Y"), 0, 0, 'R')
+
+
+def _section_header(pdf, title):
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(0, 7, _safe(title.upper()), 0, 1)
+    pdf.set_draw_color(*GREY_RL)
+    pdf.set_line_width(0.3)
+    pdf.line(MARGIN, pdf.get_y() + 0.5, PAGE_W - MARGIN, pdf.get_y() + 0.5)
+    pdf.ln(4)
+
+
+def _kv_row(pdf, label, value, bold=False, color=None, top_rule=False, indent=4, width=None):
+    w = width if width is not None else (CONTENT_W - 2 * indent)
+    x0 = pdf.get_x()
+    if top_rule:
+        pdf.set_draw_color(*GREY_RL)
+        pdf.set_line_width(0.2)
+        pdf.line(MARGIN + indent, pdf.get_y(), MARGIN + indent + w, pdf.get_y())
+        pdf.ln(1.5)
+    pdf.set_x(MARGIN + indent)
+    pdf.set_font('Helvetica', 'B' if bold else '', 9.5)
+    pdf.set_text_color(*(color or BLACK))
+    pdf.cell(w * 0.55, 6, _safe(label), 0, 0, 'L')
+    pdf.cell(w * 0.45, 6, _safe(value), 0, 1, 'R')
+    pdf.set_text_color(*BLACK)
+    pdf.set_x(x0)
+
+
+def _draw_box_around(pdf, y_start, pad=4):
+    y_end = pdf.get_y()
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_line_width(0.25)
+    pdf.rect(MARGIN, y_start - pad, CONTENT_W, (y_end - y_start) + 2 * pad, style='D')
+    pdf.set_y(y_end + pad + 4)
 
 
 def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
                  mode, active_s_name, active_s_rate, active_s_inc, raw_loans,
                  matrix_scenarios, agg_dti, stressed_sources_list=None):
+    pdf = DTIPDFReport('P', 'mm', 'A4')
+    pdf.alias_nb_pages()
+    pdf.set_margins(MARGIN, 16, MARGIN)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
     date_str = datetime.now().strftime("%B %d, %Y")
 
+    # ── Title block ──
+    pdf.set_font('Helvetica', 'B', 18)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(0, 9, "DTI ANALYSIS REPORT", 0, 1)
+    pdf.set_font('Helvetica', '', 11)
+    pdf.set_text_color(*GREY_TX)
+    pdf.cell(0, 6, "Debt-to-Income Assessment", 0, 1)
+    pdf.ln(1)
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_line_width(0.4)
+    pdf.line(MARGIN, pdf.get_y(), PAGE_W - MARGIN, pdf.get_y())
+    pdf.ln(5)
+
+    # ── Client / Date row ──
+    pdf.set_font('Helvetica', 'B', 9.5)
+    pdf.set_text_color(*BLACK)
+    pdf.cell(CONTENT_W * 0.6, 6, "Client Name: " + _safe(client), 0, 0, 'L')
+    pdf.cell(CONTENT_W * 0.4, 6, "Analysis Date: " + date_str, 0, 1, 'R')
+    pdf.ln(4)
+
+    # ── Executive Summary ──
     display_mode = mode.upper()
     if "BASELINE" in display_mode or active_s_name == "Baseline (No Stress)":
         display_mode = "NORMAL - STRESS N/A"
 
-    # ── Executive Summary kv rows ──
-    shortfall_row = ""
+    _section_header(pdf, "Executive Summary")
+    box_y = pdf.get_y()
+    _kv_row(pdf, "Analysis Mode:", display_mode)
+    _kv_row(pdf, "Monthly Income:", f"Rs. {income:,.2f}")
+    _kv_row(pdf, "Total Exposure:", f"Rs. {exposure:,.2f}")
     if shortfall > 0:
-        shortfall_row = f"""
-            <tr><td class="fail">Income Shortfall:</td>
-                <td class="kv-value fail">Rs. {shortfall:,.2f} (CRITICAL DEFICIT)</td></tr>"""
+        _kv_row(pdf, "Income Shortfall:", f"Rs. {shortfall:,.2f} (CRITICAL DEFICIT)", bold=True, color=RED)
+    _kv_row(pdf, "Aggregate Coverage:", f"{agg_dti:.2f}x", bold=True, top_rule=True)
+    _draw_box_around(pdf, box_y)
 
     # ── Scenario Details ──
-    stress_block = ""
+    _section_header(pdf, "Scenario Details")
+    box_y = pdf.get_y()
+    pdf.set_x(MARGIN + 4)
+    pdf.set_font('Helvetica', 'B', 9.5)
+    pdf.set_text_color(*NAVY)
+    pdf.cell(CONTENT_W - 8, 6, "Active Configuration: " + _safe(active_s_name), 0, 1)
+    pdf.set_text_color(*BLACK)
+
     if active_s_rate > 0 or active_s_inc > 0:
-        stress_block = f"""
-        <table class="kv-table">
-            <tr><td>Interest Rate Shock:</td><td class="kv-value">+{active_s_rate:.2f}%</td></tr>
-            <tr><td>Income Reduction:</td><td class="kv-value">-{active_s_inc:.2f}%</td></tr>
-        </table>"""
+        pdf.ln(1)
+        _kv_row(pdf, "Interest Rate Shock:", f"+{active_s_rate:.2f}%")
+        _kv_row(pdf, "Income Reduction:", f"-{active_s_inc:.2f}%")
         if stressed_sources_list:
-            source_str = esc(", ".join(stressed_sources_list))
-            stress_block += f'<p class="note">Stress Applied To: {source_str}</p>'
+            pdf.set_x(MARGIN + 4)
+            pdf.set_font('Helvetica', 'I', 8)
+            pdf.set_text_color(*GREY_TX)
+            source_str = ", ".join(stressed_sources_list)
+            pdf.multi_cell(CONTENT_W - 8, 5, "Stress Applied To: " + _safe(source_str))
+            pdf.set_text_color(*BLACK)
 
-    result_text  = "APPROVED &mdash; Within Risk Tolerance" if is_pass else "DECLINED &mdash; Exceeds Risk Limits"
-    result_class = "status-pass" if is_pass else "status-fail"
+    pdf.ln(2)
+    pdf.set_x(MARGIN + 4)
+    pdf.set_font('Helvetica', 'B', 10.5)
+    if is_pass:
+        pdf.set_text_color(*GREEN)
+        result_text = "Assessment Result: APPROVED - Within Risk Tolerance"
+    else:
+        pdf.set_text_color(*RED)
+        result_text = "Assessment Result: DECLINED - Exceeds Risk Limits"
+    pdf.cell(CONTENT_W - 8, 7, _safe(result_text), 0, 1)
+    pdf.set_text_color(*BLACK)
+    _draw_box_around(pdf, box_y)
 
-    # ── Priority Allocation Breakdown rows ──
-    alloc_rows_html = []
+    # ── Priority Allocation Breakdown ──
+    _section_header(pdf, "Priority Allocation Breakdown")
+
+    col_w = [44, 24, 24, 25, 22, 22, 21]
+    headers = ["FACILITY TYPE", "PRINCIPAL (RS.)", "PAYMENT (RS.)", "REM. INCOME",
+               "ACTUAL COV.", "REQUIRED COV.", "STATUS"]
+    aligns  = ['L', 'R', 'R', 'R', 'R', 'R', 'C']
+    row_h = 7
+    GUTTER = 1.2
+
+    def draw_table_header():
+        pdf.set_font('Helvetica', 'B', 7.3)
+        pdf.set_text_color(*BLACK)
+        pdf.set_draw_color(0, 0, 0)
+        pdf.set_line_width(0.35)
+        y0 = pdf.get_y()
+        pdf.line(MARGIN, y0, MARGIN + CONTENT_W, y0)
+        pdf.set_y(y0 + 0.8)
+        x = MARGIN
+        for i, h in enumerate(headers):
+            pdf.set_xy(x, y0 + 0.8)
+            pdf.cell(col_w[i] - GUTTER, row_h - 1.6, _safe(h), 0, 0, aligns[i])
+            x += col_w[i]
+        y1 = y0 + row_h - 0.8
+        pdf.set_line_width(0.35)
+        pdf.line(MARGIN, y1, MARGIN + CONTENT_W, y1)
+        pdf.set_y(y1 + 0.5)
+
+    draw_table_header()
+
+    pdf.set_font('Helvetica', '', 8.6)
     for idx, row in df_main_results.iterrows():
-        status       = "PASS" if row['Pass_Status'] else "FAIL"
-        status_class = "pass" if row['Pass_Status'] else "fail"
-        alloc_rows_html.append(f"""
-            <tr>
-                <td>{esc(str(row['Loan Type']))}</td>
-                <td class="right">{row['Amount']:,.0f}</td>
-                <td class="right">{row['Obligation']:,.0f}</td>
-                <td class="right">{row['Available_Income_Snapshot']:,.0f}</td>
-                <td class="right">{row['Actual Coverage']:.2f}x</td>
-                <td class="right">{row['Required Multiplier']:.2f}x</td>
-                <td class="center {status_class}">{status}</td>
-            </tr>""")
+        if pdf.get_y() + row_h > 277:
+            pdf.add_page()
+            draw_table_header()
+            pdf.set_font('Helvetica', '', 8.6)
 
-    alloc_table_html = f"""
-    <table class="data-table">
-        <colgroup>
-            <col style="width:24%"><col style="width:13%"><col style="width:13%"><col style="width:14%">
-            <col style="width:12%"><col style="width:12%"><col style="width:12%">
-        </colgroup>
-        <thead>
-            <tr>
-                <th>Facility Type</th>
-                <th class="right">Principal (Rs.)</th>
-                <th class="right">Payment (Rs.)</th>
-                <th class="right">Rem. Income (Rs.)</th>
-                <th class="right">Actual Coverage</th>
-                <th class="right">Required Coverage</th>
-                <th class="center">Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {''.join(alloc_rows_html)}
-        </tbody>
-    </table>"""
+        y0 = pdf.get_y()
+        if idx % 2 == 0:
+            pdf.set_fill_color(*ZEBRA)
+            pdf.rect(MARGIN, y0, CONTENT_W, row_h, style='F')
 
-    html_content = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>DTI Analysis Report</title>
-<style>{_PDF_CSS.replace('__DATE_STR__', date_str)}</style>
-</head>
-<body>
-    <h1>DTI Analysis Report</h1>
-    <h2>Debt-to-Income Assessment</h2>
+        x = MARGIN
+        vals = [
+            _safe(str(row['Loan Type'])),
+            f"{row['Amount']:,.0f}",
+            f"{row['Obligation']:,.0f}",
+            f"{row['Available_Income_Snapshot']:,.0f}",
+            f"{row['Actual Coverage']:.2f}x",
+            f"{row['Required Multiplier']:.2f}x",
+        ]
+        pdf.set_text_color(*BLACK)
+        for i, v in enumerate(vals):
+            pdf.set_xy(x, y0 + 0.8)
+            pdf.cell(col_w[i] - GUTTER, row_h - 1.6, v, 0, 0, aligns[i])
+            x += col_w[i]
 
-    <table class="header-table">
-        <tr>
-            <td><strong>Client Name:</strong> {esc(client)}</td>
-            <td class="right"><strong>Analysis Date:</strong> {date_str}</td>
-        </tr>
-    </table>
+        status = "PASS" if row['Pass_Status'] else "FAIL"
+        pdf.set_font('Helvetica', 'B', 8.6)
+        pdf.set_text_color(*(GREEN if row['Pass_Status'] else RED))
+        pdf.set_xy(x, y0 + 0.8)
+        pdf.cell(col_w[6] - GUTTER, row_h - 1.6, status, 0, 0, 'C')
+        pdf.set_text_color(*BLACK)
+        pdf.set_font('Helvetica', '', 8.6)
 
-    <h3>Executive Summary</h3>
-    <div class="summary-box">
-        <table class="kv-table">
-            <tr><td>Analysis Mode:</td><td class="kv-value">{esc(display_mode)}</td></tr>
-            <tr><td>Monthly Income:</td><td class="kv-value">Rs. {income:,.2f}</td></tr>
-            <tr><td>Total Exposure:</td><td class="kv-value">Rs. {exposure:,.2f}</td></tr>
-            {shortfall_row}
-            <tr class="kv-total"><td>Aggregate Coverage:</td><td class="kv-value">{agg_dti:.2f}x</td></tr>
-        </table>
-    </div>
+        pdf.set_draw_color(*GREY_RL)
+        pdf.set_line_width(0.15)
+        pdf.line(MARGIN, y0 + row_h, MARGIN + CONTENT_W, y0 + row_h)
+        pdf.set_y(y0 + row_h)
 
-    <h3>Scenario Details</h3>
-    <div class="summary-box">
-        <div class="status-line" style="color:#002060;">Active Configuration: {esc(active_s_name)}</div>
-        {stress_block}
-        <div class="status-line {result_class}" style="margin-top:10px; margin-bottom:0;">
-            Assessment Result: {result_text}
-        </div>
-    </div>
-
-    <h3>Priority Allocation Breakdown</h3>
-    {alloc_table_html}
-</body>
-</html>
-"""
-    return HTML(string=html_content).write_pdf()
+    return bytes(pdf.output())
 
 
 # ==========================================
