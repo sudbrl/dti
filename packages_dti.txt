@@ -1,5 +1,6 @@
 libglib2.0-0
-libgobject-2.0-0
+libglib2.0-dev
+libgirepository1.0-dev
 libcairo2
 libpango-1.0-0
 libpangocairo-1.0-0
