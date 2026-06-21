@@ -373,7 +373,7 @@ def _draw_box_around(pdf, y_start, pad=4):
 
 def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
                  mode, active_s_name, active_s_rate, active_s_inc, raw_loans,
-                 matrix_scenarios, agg_dti, stressed_sources_list=None):
+                 matrix_scenarios, agg_dti, stressed_sources_list=None, income_sources_list=None):
     pdf = DTIPDFReport('P', 'mm', 'A4')
     pdf.alias_nb_pages()
     pdf.set_margins(MARGIN, 16, MARGIN)
@@ -416,6 +416,78 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
         _kv_row(pdf, "Income Shortfall:", f"Rs. {shortfall:,.2f} (CRITICAL DEFICIT)", bold=True, color=RED)
     _kv_row(pdf, "Aggregate Coverage:", f"{agg_dti:.2f}x", bold=True, top_rule=True)
     _draw_box_around(pdf, box_y)
+
+    # ── Income Sources (only when Multiple Sources mode was used) ──
+    if income_sources_list:
+        _section_header(pdf, "Income Sources")
+
+        src_col_w = [CONTENT_W * 0.6, CONTENT_W * 0.4]
+        src_headers = ["SOURCE", "AMOUNT (RS.)"]
+        src_aligns = ['L', 'R']
+        src_row_h = 7
+        GUTTER = 1.2
+
+        def draw_income_header():
+            pdf.set_font('Helvetica', 'B', 7.6)
+            pdf.set_text_color(*BLACK)
+            pdf.set_draw_color(0, 0, 0)
+            pdf.set_line_width(0.35)
+            y0 = pdf.get_y()
+            pdf.line(MARGIN, y0, MARGIN + CONTENT_W, y0)
+            x = MARGIN
+            for i, h in enumerate(src_headers):
+                pdf.set_xy(x, y0 + 0.8)
+                pdf.cell(src_col_w[i] - GUTTER, src_row_h - 1.6, h, 0, 0, src_aligns[i])
+                x += src_col_w[i]
+            y1 = y0 + src_row_h - 0.8
+            pdf.set_line_width(0.35)
+            pdf.line(MARGIN, y1, MARGIN + CONTENT_W, y1)
+            pdf.set_y(y1 + 0.5)
+
+        draw_income_header()
+
+        pdf.set_font('Helvetica', '', 8.6)
+        total_src_amount = 0.0
+        for idx, src in enumerate(income_sources_list):
+            if pdf.get_y() + src_row_h > 277:
+                pdf.add_page()
+                draw_income_header()
+                pdf.set_font('Helvetica', '', 8.6)
+
+            y0 = pdf.get_y()
+            if idx % 2 == 0:
+                pdf.set_fill_color(*ZEBRA)
+                pdf.rect(MARGIN, y0, CONTENT_W, src_row_h, style='F')
+
+            amount = src.get('Amount', 0.0)
+            total_src_amount += amount
+
+            pdf.set_text_color(*BLACK)
+            pdf.set_xy(MARGIN, y0 + 0.8)
+            pdf.cell(src_col_w[0] - GUTTER, src_row_h - 1.6, _safe(src.get('Source', '')), 0, 0, 'L')
+            pdf.set_xy(MARGIN + src_col_w[0], y0 + 0.8)
+            pdf.cell(src_col_w[1] - GUTTER, src_row_h - 1.6, f"{amount:,.2f}", 0, 0, 'R')
+
+            pdf.set_draw_color(*GREY_RL)
+            pdf.set_line_width(0.15)
+            pdf.line(MARGIN, y0 + src_row_h, MARGIN + CONTENT_W, y0 + src_row_h)
+            pdf.set_y(y0 + src_row_h)
+
+        # ── Total row ──
+        y0 = pdf.get_y()
+        pdf.set_fill_color(238, 238, 238)
+        pdf.rect(MARGIN, y0, CONTENT_W, src_row_h, style='F')
+        pdf.set_draw_color(0, 0, 0)
+        pdf.set_line_width(0.35)
+        pdf.line(MARGIN, y0, MARGIN + CONTENT_W, y0)
+        pdf.set_font('Helvetica', 'B', 8.6)
+        pdf.set_xy(MARGIN, y0 + 0.8)
+        pdf.cell(src_col_w[0] - GUTTER, src_row_h - 1.6, "TOTAL", 0, 0, 'L')
+        pdf.set_xy(MARGIN + src_col_w[0], y0 + 0.8)
+        pdf.cell(src_col_w[1] - GUTTER, src_row_h - 1.6, f"{total_src_amount:,.2f}", 0, 0, 'R')
+        pdf.line(MARGIN, y0 + src_row_h, MARGIN + CONTENT_W, y0 + src_row_h)
+        pdf.set_y(y0 + src_row_h + 4)
+        pdf.set_font('Helvetica', '', 9.5)
 
     # ── Scenario Details ──
     _section_header(pdf, "Scenario Details")
@@ -521,7 +593,10 @@ def generate_pdf(client, income, df_main_results, is_pass, exposure, shortfall,
         pdf.line(MARGIN, y0 + row_h, MARGIN + CONTENT_W, y0 + row_h)
         pdf.set_y(y0 + row_h)
 
-    return bytes(pdf.output())
+    pdf_data = pdf.output()
+    if isinstance(pdf_data, str):
+        return pdf_data.encode('latin-1')
+    return bytes(pdf_data)
 
 
 # ==========================================
@@ -856,11 +931,12 @@ if st.session_state.loans:
                 else:
                     with st.spinner("Processing document..."):
                         sources_for_pdf = stressed_sources_selection if (inc_mode == "Multiple Sources" and enable_stress) else None
+                        income_sources_for_pdf = st.session_state.income_sources if inc_mode == "Multiple Sources" else None
                         pdf_bytes = generate_pdf(
                             report_name, gross_income, df_result, overall_pass, tot_prin,
                             income_shortfall, mode_label, scenario_name, stress_rate_val,
                             stress_inc_val, st.session_state.loans, matrix_data, agg_dti,
-                            sources_for_pdf
+                            sources_for_pdf, income_sources_for_pdf
                         )
                         st.session_state['generated_pdf']      = pdf_bytes
                         st.session_state['generated_pdf_name'] = f"Report_{report_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
