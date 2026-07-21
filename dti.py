@@ -3,13 +3,15 @@ import pandas as pd
 from fpdf import FPDF
 from datetime import datetime
 import copy
+import time
+import os
 
 # ==========================================
-# 🔐 AUTHENTICATION SYSTEM (DTI Profile Style)
+# 🔐 AUTHENTICATION SYSTEM
 # ==========================================
 def _check_credentials(username: str, password: str) -> bool:
     try:
-        return (username == st.secrets["auth"]["username"] and
+        return (username == st.secrets["auth"]["username"] and 
                 password == st.secrets["auth"]["password"])
     except Exception:
         return (username == "admin" and password == "admin")
@@ -28,6 +30,7 @@ def login_ui():
         padding: 0 1rem !important;
         margin: 0 auto !important;
     }
+    /* Force the middle column to be a large, prominent card */
     div[data-testid="stHorizontalBlock"] > div:nth-child(2) > div[data-testid="stVerticalBlock"] {
         max-width: 580px !important;
         width: 100% !important;
@@ -52,13 +55,14 @@ def login_ui():
     .lp-logo { font-size: 3.5rem; display: block; margin-bottom: 1rem; position: relative; z-index: 1; }
     .lp-app-name { font-size: 1.85rem; font-weight: 800; color: #ffffff; letter-spacing: -0.04em; margin-bottom: 0.5rem; position: relative; z-index: 1; }
     .lp-app-tagline { font-size: 0.85rem; color: rgba(255,255,255,0.75); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; position: relative; z-index: 1; }
-
+    
     .login-body { padding: 2.5rem; }
     .lp-welcome-title { font-size: 1.35rem; font-weight: 700; color: #1e1b4b; margin-bottom: 0.5rem; }
     .lp-welcome-sub { font-size: 0.95rem; color: #64748b; line-height: 1.5; margin-bottom: 1.5rem; }
-
+    
     .lp-field-label { display: block; font-size: 0.82rem; font-weight: 600; color: #374151; margin-bottom: 0.4rem; margin-top: 1.2rem; }
-
+    
+    /* Override Streamlit default input styling for login */
     div[data-testid="stTextInput"] label { display: none !important; }
     div[data-testid="stTextInput"] > div { background: transparent !important; }
     div[data-testid="stTextInput"] > div > div {
@@ -74,7 +78,7 @@ def login_ui():
         font-size: 1rem !important; font-family: 'Inter', sans-serif !important; padding: 0.85rem 1rem !important;
     }
     div[data-testid="stTextInput"] > div > div > input::placeholder { color: #9ca3af !important; }
-
+    
     div.stButton > button {
         width: 100% !important;
         background: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%) !important;
@@ -87,7 +91,7 @@ def login_ui():
         transform: translateY(-1px) !important; box-shadow: 0 8px 24px rgba(124,58,237,0.4) !important;
     }
     div.stButton > button:active { transform: translateY(0) !important; }
-
+    
     .lp-error {
         background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px;
         padding: 0.8rem 1rem; margin-top: 1rem; font-size: 0.85rem; color: #b91c1c;
@@ -95,38 +99,38 @@ def login_ui():
     }
     </style>
     """, unsafe_allow_html=True)
-
+    
     if "_login_error" not in st.session_state:
         st.session_state["_login_error"] = ""
-
+        
     _, card_col, _ = st.columns([1, 2.2, 1])
     with card_col:
         st.markdown("""
         <div class="lp-header">
-            <span class="lp-logo">🏦</span>
+            <span class="lp-logo">📊</span>
             <div class="lp-app-name">Integrated Analysis Engine</div>
-            <div class="lp-app-tagline">DTI &amp; LTV Credit Assessment Platform</div>
+            <div class="lp-app-tagline">DTI & LTV Credit Assessment Platform</div>
         </div>
         """, unsafe_allow_html=True)
-
+        
         st.markdown('<div class="login-body">', unsafe_allow_html=True)
         st.markdown('<div class="lp-welcome-title">Welcome Back</div>', unsafe_allow_html=True)
         st.markdown('<div class="lp-welcome-sub">Sign in with your institutional credentials to access the integrated analysis platform.</div>', unsafe_allow_html=True)
-
+        
         st.markdown('<span class="lp-field-label">Username</span>', unsafe_allow_html=True)
         username = st.text_input(label="u", placeholder="Enter your username", key="_login_u", label_visibility="collapsed", autocomplete="username")
-
+        
         st.markdown('<span class="lp-field-label">Password</span>', unsafe_allow_html=True)
         password = st.text_input(label="p", placeholder="Enter your password", type="password", key="_login_p", label_visibility="collapsed", autocomplete="current-password")
-
+        
         clicked = st.button("Sign In →", key="_login_btn", use_container_width=True)
-
+        
         err = st.session_state.get("_login_error", "")
         if err:
             st.markdown(f'<div class="lp-error"><span>⚠</span><span>{err}</span></div>', unsafe_allow_html=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
+        
+        st.markdown('</div>', unsafe_allow_html=True)  # Close login-body
+        
         if clicked:
             u = str(username).strip(); p = str(password).strip()
             if not u:
@@ -144,12 +148,12 @@ def login_ui():
                 st.session_state["_login_error"] = f'Invalid credentials for "{u}". Please check your username and password and try again.'
                 st.rerun()
 
-if "authenticated" not in st.session_state:
+if "authenticated" not in st.session_state: 
     st.session_state["authenticated"] = False
-if "auth_username" not in st.session_state:
+if "auth_username" not in st.session_state: 
     st.session_state["auth_username"] = ""
 
-if not st.session_state["authenticated"]:
+if not st.session_state["authenticated"]: 
     login_ui()
     st.stop()
 
@@ -175,49 +179,40 @@ st.markdown("""
 }
 .block-container { max-width: 96% !important; padding-top: 1.5rem !important; }
 
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
-    box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+/* Sidebar Styling */
+[data-testid="stSidebar"] { 
+    background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%); 
+    box-shadow: 4px 0 24px rgba(0,0,0,0.18); 
 }
 [data-testid="stSidebar"] * { color: #e0e7ff; }
-[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"],
-[data-testid="stSidebar"] input {
-    background: rgba(255,255,255,0.95) !important;
-    color: #1e1b4b !important;
-    font-weight: 600;
+[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"], 
+[data-testid="stSidebar"] input { 
+    background: rgba(255,255,255,0.95) !important; 
+    color: #1e1b4b !important; 
+    font-weight: 600; 
     border-radius: 8px;
 }
 
-/* ---- Radio widgets: question label stays light (sits on dark sidebar bg) ---- */
-[data-testid="stSidebar"] div[data-testid="stRadio"] > label,
-[data-testid="stSidebar"] div[data-testid="stRadio"] > label p,
-[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
-    color: #e0e7ff !important;
-    font-weight: 700 !important;
-    font-size: 0.92rem !important;
-}
-
-/* ---- Radio OPTIONS pill (white background) ---- */
-[data-testid="stSidebar"] div[role="radiogroup"] {
+/* Professional Sidebar Radio Buttons - FIXED VISIBILITY */
+[data-testid="stSidebar"] .stRadio > div {
     background: rgba(255,255,255,0.95) !important;
     border-radius: 8px;
-    padding: 0.6rem 0.8rem !important;
-    margin: 0.4rem 0 !important;
-    gap: 0.5rem !important;
+    padding: 0.5rem !important;
+    margin: 0.5rem 0 !important;
 }
-/* Option text must be dark since it sits on the white pill above */
-[data-testid="stSidebar"] div[role="radiogroup"] label,
-[data-testid="stSidebar"] div[role="radiogroup"] label p,
-[data-testid="stSidebar"] div[role="radiogroup"] label span,
-[data-testid="stSidebar"] div[role="radiogroup"] label div {
+[data-testid="stSidebar"] .stRadio label {
     color: #1e1b4b !important;
     font-weight: 600 !important;
     font-size: 0.9rem !important;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"] {
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
+    gap: 0.5rem !important;
+}
+[data-testid="stSidebar"] .stRadio input[type="radio"] {
     accent-color: #7c3aed !important;
 }
 
+/* Professional Sidebar Expanders (Dropdowns) */
 [data-testid="stSidebar"] .stExpander {
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.15);
@@ -236,29 +231,7 @@ st.markdown("""
     padding: 1rem !important;
 }
 
-/* ---- Sidebar user/logout bar ---- */
-.sb-user-card {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 12px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    display: flex; align-items: center; justify-content: space-between;
-}
-.sb-user-name { font-weight: 700 !important; color: #ffffff !important; font-size: 0.9rem !important; }
-[data-testid="stSidebar"] div[data-testid="column"] div.stButton > button {
-    background: rgba(255,255,255,0.12) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255,255,255,0.35) !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    padding: 0.4rem 0.8rem !important;
-}
-[data-testid="stSidebar"] div[data-testid="column"] div.stButton > button:hover {
-    background: rgba(239,68,68,0.85) !important;
-    border-color: #ef4444 !important;
-}
-
+/* Main App Inputs & Buttons */
 div[data-testid="stTextInput"] input, div[data-testid="stNumberInput"] input {
     border-radius: 10px !important; border: 1px solid #e2e8f0 !important;
     padding: 0.65rem 0.9rem !important; font-size: 0.95rem !important;
@@ -274,10 +247,10 @@ div.stButton > button[kind="primary"], div.stButton > button[data-testid="baseBu
 }
 div.stButton > button[kind="primary"]:hover { background-color: #6d28d9 !important; border-color: #6d28d9 !important; transform: translateY(-1px); }
 
-.metric-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%);
-    padding: 1.25rem 1.5rem; border-radius: 14px; border: 1px solid #ddd6fe;
-    box-shadow: 0 4px 14px rgba(124,58,237,0.08);
+.metric-card { 
+    background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%); 
+    padding: 1.25rem 1.5rem; border-radius: 14px; border: 1px solid #ddd6fe; 
+    box-shadow: 0 4px 14px rgba(124,58,237,0.08); 
 }
 .metric-label { font-size: 0.75rem; font-weight: 700; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.35rem; }
 .metric-value { font-size: 1.7rem; font-weight: 700; color: #1e1b4b; font-family: 'DM Mono', monospace; line-height: 1.1; }
@@ -350,7 +323,7 @@ PROFESSIONAL_COMBINED_CAP = 1_500_000.0
 # ==========================================
 def init_state():
     defaults = {
-        'loans': [], 'income_sources': [], 'fmv_sources': [],
+        'loans': [], 'income_sources': [], 'fmv_sources': [], 
         'custom_scenarios': [], 'loan_id_counter': 0, 'fmv_id_counter': 0,
         'loan_type_counters': {}, 'ltv_policy': copy.deepcopy(DEFAULT_LTV_POLICY)
     }
@@ -361,7 +334,7 @@ def init_state():
 init_state()
 
 # ==========================================
-# 🧮 HELPER FUNCTIONS
+# 🧮 HELPER & LTV ENGINE FUNCTIONS
 # ==========================================
 def get_policy_dict():
     return {p["Loan Type"]: (None if p["Unsecured"] else p["Max LTV%"]) for p in st.session_state.ltv_policy}
@@ -407,26 +380,26 @@ def run_portfolio_ltv(loans, fmv_sources):
     policy = get_policy_dict()
     fmv_sources = [s for s in fmv_sources if 'id' in s]
     fmv_id_set = {s['id'] for s in fmv_sources}
-
+    
     vehicle_ids = {s['id'] for s in fmv_sources if s.get('IsVehicle')}
     property_ids = fmv_id_set - vehicle_ids
     collateral_fmv_map = {s['id']: s['Amount'] for s in fmv_sources}
     total_fmv_original = sum(s['Amount'] for s in fmv_sources)
-
+    
     remaining_fmv = {sid: collateral_fmv_map[sid] for sid in fmv_id_set}
     effective_fmv_denom = {}
-
+    
     active_loans = [
         l for l in loans if not _loan_is_ltv_exempt(l) and policy.get(l['Loan Type']) is not None
         and (l.get('collateral_mode', 'pool') == 'pool' or (l.get('collateral_mode') == 'assigned' and bool(l.get('assigned_collateral_ids'))))
     ]
-
+    
     for loan in active_loans:
         lid = loan['_loan_id']
         mode = loan.get('collateral_mode', 'pool')
         max_ltv = policy.get(loan['Loan Type'])
         allowed_ids = vehicle_ids if _is_hp_loan(loan['Loan Type']) else property_ids
-
+        
         if mode == 'pool':
             total_remaining = sum(remaining_fmv[cid] for cid in allowed_ids)
             effective_fmv_denom[lid] = total_remaining
@@ -455,41 +428,41 @@ def run_portfolio_ltv(loans, fmv_sources):
         mode = loan.get('collateral_mode', 'pool')
         exempt = _loan_is_ltv_exempt(loan)
         max_ltv = policy.get(lt)
-
+        
         exempt_reason = None
         if max_ltv is None: exempt_reason = "policy"
         elif loan.get('override_ltv', False): exempt_reason = "override"
         elif loan.get('tied_property_ids') and not (mode == 'assigned' and bool(loan.get('assigned_collateral_ids'))):
             exempt_reason = "tieup"
-
+            
         if exempt:
             results.append({**loan, 'Max LTV%': None, 'Assigned FMV': 0.0, 'Pool FMV': 0.0,
-                'Total FMV': 0.0, 'LTV%': None, 'Pass_Status': True, 'Is_Unsecured': True,
+                'Total FMV': 0.0, 'LTV%': None, 'Pass_Status': True, 'Is_Unsecured': True, 
                 'Collateral_Mode': mode, 'No_FMV_Error': False, 'Exempt_Reason': exempt_reason})
             continue
-
+            
         fmv_denom = effective_fmv_denom.get(lid, 0.0)
         if mode == 'pool':
             assigned_fmv_val = 0.0; pool_fmv_val = fmv_denom; total_alloc = fmv_denom
         else:
             assigned_fmv_val = fmv_denom; pool_fmv_val = 0.0; total_alloc = fmv_denom
-
+            
         if total_alloc <= 0:
             ltv_pct = None; passes = False; no_fmv_error = True
         else:
             ltv_pct = principal / total_alloc * 100.0
             passes = ltv_pct <= max_ltv; no_fmv_error = False
-
-        results.append({**loan, 'Max LTV%': max_ltv, 'Assigned FMV': assigned_fmv_val,
+            
+        results.append({**loan, 'Max LTV%': max_ltv, 'Assigned FMV': assigned_fmv_val, 
             'Pool FMV': pool_fmv_val, 'Total FMV': total_alloc, 'LTV%': ltv_pct,
-            'Pass_Status': passes, 'Is_Unsecured': False, 'Collateral_Mode': mode,
+            'Pass_Status': passes, 'Is_Unsecured': False, 'Collateral_Mode': mode, 
             'No_FMV_Error': no_fmv_error, 'Exempt_Reason': None})
 
     secured_results = [r for r in results if not r['Is_Unsecured']]
     total_secured_principal = sum(r['Principal'] for r in secured_results)
     total_exposure = sum(r['Principal'] for r in results)
     total_alloc_fmv_sum = sum(r['Total FMV'] for r in secured_results)
-
+    
     wtd_ltv = total_secured_principal / total_alloc_fmv_sum * 100.0 if total_alloc_fmv_sum > 0 else 0.0
     aggregate_ltv = total_secured_principal / total_fmv_original * 100.0 if total_fmv_original > 0 else 0.0
     overall_pass = all(r['Pass_Status'] for r in results)
@@ -500,6 +473,9 @@ def run_portfolio_ltv(loans, fmv_sources):
         'wtd_ltv': wtd_ltv, 'aggregate_ltv': aggregate_ltv, 'overall_pass': overall_pass
     }
 
+# ==========================================
+# 🧮 DTI ENGINE
+# ==========================================
 def calculate_obligation(loan_type, principal, rate, tenure):
     if principal <= 0 or rate <= 0: return 0.0
     r_monthly = (rate / 100) / 12
@@ -510,7 +486,7 @@ def calculate_obligation(loan_type, principal, rate, tenure):
         n_months = tenure * 12
         try:
             return (principal * r_monthly * ((1 + r_monthly) ** n_months)) / (((1 + r_monthly) ** n_months) - 1)
-        except Exception:
+        except:
             return 0.0
 
 def run_waterfall_allocation(df, total_income):
@@ -544,15 +520,8 @@ def run_waterfall_allocation(df, total_income):
     return df_sorted
 
 # ==========================================
-# 📄 PDF GENERATION (fpdf2 - reliable, bytes-safe)
+# 📄 CONTINUOUS PROFESSIONAL PDF ENGINE
 # ==========================================
-def _sanitize_pdf_text(value) -> str:
-    """FPDF's core (Helvetica) fonts only support latin-1. Strip/replace
-    anything outside that range so a single stray character can't blow up
-    (or silently blank out) the whole document."""
-    text = "" if value is None else str(value)
-    return text.encode("latin-1", "replace").decode("latin-1")
-
 class IntegratedPDFReport(FPDF):
     def header(self):
         self.set_font('Helvetica', 'B', 16)
@@ -561,7 +530,7 @@ class IntegratedPDFReport(FPDF):
         self.ln(2)
         self.set_font('Helvetica', '', 10)
         self.set_text_color(100)
-        self.cell(95, 5, _sanitize_pdf_text(f"Client: {self.client_name}"), 0, 0, 'L')
+        self.cell(95, 5, f"Client: {self.client_name}", 0, 0, 'L')
         self.cell(0, 5, f"Date: {self.date_str}", 0, 1, 'R')
         self.ln(4)
         self.set_draw_color(0, 32, 96)
@@ -575,30 +544,13 @@ class IntegratedPDFReport(FPDF):
         self.set_text_color(128)
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', 0, 0, 'C')
 
-
-def _get_pdf_bytes(pdf: FPDF) -> bytes:
-    """Return the rendered PDF as real `bytes`, regardless of whether the
-    installed fpdf package is the modern fpdf2 (returns bytearray) or the
-    legacy/unmaintained fpdf (can return str). Handing the wrong type to
-    st.download_button is the classic cause of a 0kb / blank download."""
-    raw = pdf.output()
-    if isinstance(raw, (bytes, bytearray)):
-        data = bytes(raw)
-    elif isinstance(raw, str):
-        data = raw.encode("latin-1", "replace")
-    else:
-        data = bytes(raw)
-    if not data:
-        raise RuntimeError("PDF renderer produced an empty document.")
-    return data
-
-
-def generate_integrated_pdf(client_name, report_data) -> bytes:
+def generate_integrated_pdf(client_name, report_data):
     pdf = IntegratedPDFReport()
     pdf.alias_nb_pages()
-    pdf.client_name = _sanitize_pdf_text(client_name)
+    pdf.client_name = client_name
     pdf.date_str = datetime.now().strftime("%B %d, %Y")
-
+    
+    # Extract Data
     gross_income = report_data.get('gross_income', 0)
     eff_income = report_data.get('eff_income', 0)
     scenario_name = report_data.get('scenario_name', 'Baseline')
@@ -609,27 +561,29 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
     dti_agg_dti = report_data.get('dti_agg_dti', 0)
     dti_shortfall = report_data.get('dti_shortfall', 0)
     df_dti_res = report_data.get('df_dti_res')
-
+    
     ltv_results = report_data.get('ltv_results', [])
     ltv_summary = report_data.get('ltv_summary', {})
     total_fmv = ltv_summary.get('total_fmv', 0)
     total_exposure = ltv_summary.get('total_exposure', 0)
     aggregate_ltv = ltv_summary.get('aggregate_ltv', 0)
     ltv_overall_pass = ltv_summary.get('overall_pass', True)
-
+    
     income_sources = report_data.get('income_sources', [])
     fmv_sources = report_data.get('fmv_sources', [])
-
+    
     overall_status_pass = dti_overall_pass and ltv_overall_pass
+    status_class = "status-pass" if overall_status_pass else "status-fail"
+    status_text = "OVERALL ASSESSMENT: APPROVED" if overall_status_pass else "OVERALL ASSESSMENT: DECLINED"
 
     pdf.add_page()
-
+    
     # Executive Summary
     pdf.set_font('Helvetica', 'B', 12)
     pdf.set_text_color(0, 32, 96)
     pdf.cell(0, 8, 'Executive Summary', 0, 1)
     pdf.ln(2)
-
+    
     pdf.set_font('Helvetica', 'B', 10)
     if overall_status_pass:
         pdf.set_text_color(6, 95, 70)
@@ -638,30 +592,26 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         pdf.set_text_color(153, 27, 27)
         pdf.cell(0, 6, 'OVERALL ASSESSMENT: DECLINED', 0, 1)
     pdf.ln(2)
-
+    
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(0)
     pdf.cell(95, 5, f"Monthly Gross Income: Rs. {gross_income:,.2f}", 0, 0)
     pdf.cell(0, 5, f"Total Loan Exposure: Rs. {total_exposure:,.2f}", 0, 1)
-
+    
     inc_label = "Effective Income (Post-Stress):" if enable_stress else "Effective Income (Baseline):"
     pdf.cell(95, 5, f"{inc_label} Rs. {eff_income:,.2f}", 0, 0)
     pdf.cell(0, 5, f"Total Collateral FMV: Rs. {total_fmv:,.2f}", 0, 1)
-
+    
     pdf.cell(95, 5, f"Aggregate DTI Coverage: {dti_agg_dti:.2f}x", 0, 0)
     pdf.cell(0, 5, f"Aggregate LTV%: {aggregate_ltv:.2f}%", 0, 1)
-
+    
     dti_status = 'PASS' if dti_overall_pass else 'FAIL'
     pdf.set_font('Helvetica', 'B', 9)
-    if dti_overall_pass:
-        pdf.set_text_color(5, 150, 105)
-    else:
-        pdf.set_text_color(220, 38, 38)
+    pdf.set_text_color(5, 150, 105) if dti_overall_pass else pdf.set_text_color(220, 38, 38)
     pdf.cell(95, 5, f"DTI Income Shortfall: Rs. {dti_shortfall:,.2f}", 0, 0)
     pdf.cell(0, 5, f"DTI Status: {dti_status}", 0, 1)
-    pdf.set_text_color(0)
     pdf.ln(4)
-
+    
     # DTI Section
     if df_dti_res is not None and not df_dti_res.empty:
         pdf.add_page()
@@ -669,14 +619,14 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         pdf.set_text_color(0, 32, 96)
         pdf.cell(0, 8, 'Debt-to-Income (DTI) Analysis', 0, 1)
         pdf.ln(2)
-
+        
         pdf.set_font('Helvetica', '', 9)
         pdf.set_text_color(0)
-        pdf.cell(0, 5, _sanitize_pdf_text(f"Active Scenario: {scenario_name}"), 0, 1)
+        pdf.cell(0, 5, f"Active Scenario: {scenario_name}", 0, 1)
         if enable_stress:
             pdf.cell(0, 5, f"Interest Rate Shock: +{stress_rate:.2f}% | Income Reduction: -{stress_inc:.2f}%", 0, 1)
         pdf.ln(2)
-
+        
         if income_sources:
             pdf.set_font('Helvetica', 'B', 10)
             pdf.set_text_color(0, 32, 96)
@@ -688,18 +638,18 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
             pdf.cell(70, 5, 'Amount (Rs.)', 1, 1, 'R')
             pdf.set_font('Helvetica', '', 8)
             for src in income_sources:
-                pdf.cell(120, 5, _sanitize_pdf_text(src['Source']), 1, 0)
+                pdf.cell(120, 5, src['Source'], 1, 0)
                 pdf.cell(70, 5, f"{src['Amount']:,.2f}", 1, 1, 'R')
             pdf.set_font('Helvetica', 'B', 8)
             pdf.cell(120, 5, 'Total', 1, 0)
             pdf.cell(70, 5, f"{gross_income:,.2f}", 1, 1, 'R')
             pdf.ln(4)
-
+        
         pdf.set_font('Helvetica', 'B', 10)
         pdf.set_text_color(0, 32, 96)
         pdf.cell(0, 6, 'Priority Allocation Breakdown', 0, 1)
         pdf.ln(1)
-
+        
         col_w = [45, 25, 25, 25, 25, 25, 20]
         headers = ["Facility Type", "Principal", "Payment", "Rem. Income", "Act. Cov.", "Req. Cov.", "Status"]
         pdf.set_font('Helvetica', 'B', 7)
@@ -707,11 +657,11 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         for i, h in enumerate(headers):
             pdf.cell(col_w[i], 5, h, 1, 0, 'C' if i > 0 else 'L')
         pdf.ln()
-
+        
         pdf.set_font('Helvetica', '', 7)
         for _, row in df_dti_res.iterrows():
             status = "PASS" if row['Pass_Status'] else "FAIL"
-            pdf.cell(col_w[0], 5, _sanitize_pdf_text(row['Loan Type'])[:20], 1, 0, 'L')
+            pdf.cell(col_w[0], 5, row['Loan Type'][:20], 1, 0, 'L')
             pdf.cell(col_w[1], 5, f"{row['Amount']:,.0f}", 1, 0, 'R')
             pdf.cell(col_w[2], 5, f"{row['Obligation']:,.0f}", 1, 0, 'R')
             pdf.cell(col_w[3], 5, f"{row['Available_Income_Snapshot']:,.0f}", 1, 0, 'R')
@@ -733,7 +683,7 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         pdf.set_text_color(0, 32, 96)
         pdf.cell(0, 8, 'Loan-to-Value (LTV) Analysis', 0, 1)
         pdf.ln(2)
-
+        
         if fmv_sources:
             pdf.set_font('Helvetica', 'B', 10)
             pdf.set_text_color(0, 32, 96)
@@ -748,8 +698,8 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
             pdf.set_font('Helvetica', '', 8)
             for src in fmv_sources:
                 ctype = "Vehicle" if src.get('IsVehicle') else "Standard"
-                pdf.cell(60, 5, _sanitize_pdf_text(src.get('Plot', 'N/A')), 1, 0)
-                pdf.cell(40, 5, _sanitize_pdf_text(src.get('Owner', 'N/A')), 1, 0)
+                pdf.cell(60, 5, src.get('Plot', 'N/A'), 1, 0)
+                pdf.cell(40, 5, src.get('Owner', 'N/A'), 1, 0)
                 pdf.cell(40, 5, ctype, 1, 0)
                 pdf.cell(50, 5, f"{src.get('Amount', 0):,.0f}", 1, 1, 'R')
             pdf.set_font('Helvetica', 'B', 8)
@@ -761,7 +711,7 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         pdf.set_text_color(0, 32, 96)
         pdf.cell(0, 6, 'Facility LTV Breakdown', 0, 1)
         pdf.ln(1)
-
+        
         col_w = [20, 40, 30, 30, 20, 20, 30]
         headers = ["A/C No.", "Facility Type", "Principal", "Total FMV", "LTV%", "Max LTV%", "Status"]
         pdf.set_font('Helvetica', 'B', 7)
@@ -769,13 +719,13 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         for i, h in enumerate(headers):
             pdf.cell(col_w[i], 5, h, 1, 0, 'C' if i > 0 else 'L')
         pdf.ln()
-
+        
         pdf.set_font('Helvetica', '', 7)
         for row in ltv_results:
             is_unsec = row.get('Is_Unsecured', False)
             ltv_val = row.get('LTV%')
             max_ltv = row.get('Max LTV%')
-
+            
             if is_unsec:
                 ltv_text = "EXEMPT"
                 max_disp = "N/A"
@@ -785,17 +735,17 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
             else:
                 ltv_text = f"{ltv_val:.2f}%"
                 max_disp = f"{max_ltv:.0f}%" if max_ltv else "N/A"
-
+                
             status = "PASS" if row['Pass_Status'] else "FAIL"
             fmv_disp = 'N/A' if is_unsec else f"{row['Total FMV']:,.0f}"
-
-            pdf.cell(col_w[0], 5, _sanitize_pdf_text(row.get('loan_account_id', 'N/A')), 1, 0, 'L')
-            pdf.cell(col_w[1], 5, _sanitize_pdf_text(row['Loan Type'])[:20], 1, 0, 'L')
+            
+            pdf.cell(col_w[0], 5, row.get('loan_account_id', 'N/A'), 1, 0, 'L')
+            pdf.cell(col_w[1], 5, row['Loan Type'][:20], 1, 0, 'L')
             pdf.cell(col_w[2], 5, f"{row['Principal']:,.0f}", 1, 0, 'R')
             pdf.cell(col_w[3], 5, fmv_disp, 1, 0, 'R')
             pdf.cell(col_w[4], 5, ltv_text, 1, 0, 'R')
             pdf.cell(col_w[5], 5, max_disp, 1, 0, 'R')
-
+            
             if row['Pass_Status']:
                 pdf.set_text_color(5, 150, 105)
             else:
@@ -804,7 +754,7 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
             pdf.cell(col_w[6], 5, status, 1, 1, 'C')
             pdf.set_font('Helvetica', '', 7)
             pdf.set_text_color(0)
-
+            
         pdf.set_font('Helvetica', 'B', 7)
         agg_status = 'PASS' if ltv_overall_pass else 'FAIL'
         pdf.cell(col_w[0] + col_w[1], 5, 'AGGREGATE', 1, 0, 'L')
@@ -817,30 +767,16 @@ def generate_integrated_pdf(client_name, report_data) -> bytes:
         else:
             pdf.set_text_color(220, 38, 38)
         pdf.cell(col_w[6], 5, agg_status, 1, 1, 'C')
-        pdf.set_text_color(0)
 
-    return _get_pdf_bytes(pdf)
+    return pdf.output()
 
 # ==========================================
 # 📐 SIDEBAR CONFIGURATION
 # ==========================================
 with st.sidebar:
-    # ---- User info + Logout ----
-    uc1, uc2 = st.columns([2.2, 1])
-    with uc1:
-        st.markdown(
-            f'<div class="sb-user-card"><span class="sb-user-name">👤 {st.session_state.get("auth_username", "User")}</span></div>',
-            unsafe_allow_html=True
-        )
-    with uc2:
-        if st.button("🚪 Logout", key="_logout_btn", use_container_width=True):
-            for key in ("authenticated", "auth_username", "_login_u", "_login_p", "_login_error"):
-                st.session_state.pop(key, None)
-            st.session_state["authenticated"] = False
-            st.rerun()
-
     st.markdown("## ⚙️ Configuration Panel")
-
+    
+    # --- INCOME & STRESS (DTI) ---
     with st.expander("💰 Income & Stress Configuration (DTI)", expanded=True):
         inc_mode = st.radio("Income Entry Method", ["Single Total", "Multiple Sources"])
         gross_income = 0.0
@@ -860,17 +796,17 @@ with st.sidebar:
                     st.session_state.income_sources = []
                     st.rerun()
                 gross_income = sum(x['Amount'] for x in st.session_state.income_sources)
-
+                
         st.markdown("---")
         enable_stress = st.toggle("Enable Stress Testing", value=False)
         stress_rate_val, stress_inc_val, scenario_name = 0.0, 0.0, "Baseline (No Stress)"
         stressed_sources_selection = []
-
+        
         if enable_stress:
             if inc_mode == "Multiple Sources" and st.session_state.income_sources:
                 all_source_names = [x['Source'] for x in st.session_state.income_sources]
                 stressed_sources_selection = st.multiselect("Select Sources to Stress", all_source_names, default=all_source_names)
-
+            
             with st.form("create_scenario_form"):
                 fc1, fc2 = st.columns(2)
                 c_name = fc1.text_input("Scenario Name")
@@ -880,7 +816,7 @@ with st.sidebar:
                     if c_name:
                         st.session_state.custom_scenarios.append({"Name": c_name, "Rate": c_rate, "Income": c_inc})
                         st.rerun()
-
+                        
             if st.session_state.custom_scenarios:
                 c_names = [s['Name'] for s in st.session_state.custom_scenarios]
                 active_c_name = st.selectbox("Active Scenario", c_names)
@@ -890,12 +826,13 @@ with st.sidebar:
                     stress_inc_val = active_s['Income']
                     scenario_name = active_c_name
 
+    # --- COLLATERAL (LTV) ---
     with st.expander("🏠 Collateral Configuration (LTV)", expanded=True):
         sb_plot = st.text_input("Property Reference", placeholder="e.g. Plot 42-B")
         sb_owner = st.text_input("Owner Name", placeholder="e.g. John Doe")
         sb_fmv = st.number_input("Fair Market Value (Rs.)", min_value=0.0, step=50000.0)
         sb_coll_type = st.radio("Collateral Type", ["Property", "Vehicle"])
-
+        
         if st.button("Add Property", type="primary"):
             if sb_fmv > 0 and sb_plot.strip():
                 st.session_state.fmv_sources.append({
@@ -903,7 +840,7 @@ with st.sidebar:
                     "Amount": sb_fmv, "IsVehicle": (sb_coll_type == "Vehicle")
                 })
                 st.rerun()
-
+                
         if st.session_state.fmv_sources:
             st.markdown(f"**Total FMV:** Rs. {sum(s['Amount'] for s in st.session_state.fmv_sources):,.0f}")
             for src in st.session_state.fmv_sources:
@@ -924,8 +861,6 @@ with st.sidebar:
         for k in ['loans', 'income_sources', 'fmv_sources', 'custom_scenarios']: st.session_state[k] = []
         for k in ['loan_id_counter', 'fmv_id_counter']: st.session_state[k] = 0
         st.session_state['loan_type_counters'] = {}
-        st.session_state.pop('generated_pdf', None)
-        st.session_state.pop('generated_pdf_name', None)
         st.rerun()
 
 # ==========================================
@@ -936,29 +871,29 @@ st.markdown("Unified credit assessment for Debt-to-Income and Loan-to-Value metr
 
 with st.container():
     st.markdown("<div class='input-section'><h5>➕ Add New Facility</h5>", unsafe_allow_html=True)
-
+    
     c1, c2, c3, c4 = st.columns([2, 1.5, 1, 1])
     with c1: l_type = st.selectbox("Facility Type", list(LOAN_CONFIG.keys()))
     with c2: l_amt = st.number_input("Principal Amount (Rs.)", step=10000.0, min_value=0.0)
     with c3: l_rate = st.number_input("Interest Rate (%)", value=12.0, step=0.25)
     with c4: l_ten = st.number_input("Tenure (Years)", value=DEFAULT_TENURE.get(l_type, 5), min_value=1)
-
+    
     st.markdown("#### DTI Parameters")
     c_opt, c_btn = st.columns([3, 1])
     with c_opt:
         use_man = st.checkbox("Use Fixed Monthly Payment (Override EMI)")
     man_emi = st.number_input("Fixed Monthly Payment (Rs.)", 0.0, step=1000.0) if use_man else 0.0
-
+    
     st.markdown("#### LTV Parameters")
     policy_dict = get_policy_dict()
     max_ltv_sel = policy_dict.get(l_type)
     is_hp = _is_hp_loan(l_type)
-
+    
     override_ltv = False
     coll_mode = "pool"
     selected_colls = []
     tie_up_colls = []
-
+    
     if max_ltv_sel is not None:
         override_ltv = st.checkbox("Override collateral requirement (LTV Exempt)")
         if not override_ltv:
@@ -972,7 +907,7 @@ with st.container():
                     selected_colls = [opts[lbl] for lbl in sel_labels]
                 else:
                     st.warning(f"No {'Vehicle' if is_hp else 'Property'} collateral available.")
-
+                    
         use_tie_up = st.checkbox("Tie up Property (additional security)?")
         if use_tie_up and st.session_state.fmv_sources:
             opts = {f"{s['Plot']} - Rs.{s['Amount']:,.0f}": s['id'] for s in st.session_state.fmv_sources}
@@ -980,17 +915,17 @@ with st.container():
             tie_up_colls = [opts[lbl] for lbl in tie_sel]
     else:
         st.info("Unsecured facility — no collateral required for LTV.")
-
+        
     if c_btn.button("Add to Portfolio", type="primary", use_container_width=True):
         errors = []
         if l_amt <= 0: errors.append("Principal must be > 0")
         if l_rate <= 0: errors.append("Rate must be > 0")
         if l_ten <= 0: errors.append("Tenure must be >= 1")
         if use_man and man_emi <= 0: errors.append("Fixed EMI must be > 0")
-
+        
         cap_ok, cap_msg = _check_professional_caps(l_type, l_amt, st.session_state.loans)
         if not cap_ok: errors.append(cap_msg)
-
+        
         if errors:
             for e in errors: st.error(e)
         else:
@@ -998,7 +933,7 @@ with st.container():
             lid = st.session_state.loan_id_counter
             st.session_state.loan_id_counter += 1
             ac_id = _generate_loan_account_id(l_type)
-
+            
             st.session_state.loans.append({
                 "Loan Type": l_type, "Principal": l_amt, "Base Rate": l_rate, "Tenure": l_ten,
                 "Base_Obligation": man_emi if use_man else std_emi, "Required Multiplier": LOAN_CONFIG[l_type],
@@ -1007,7 +942,6 @@ with st.container():
                 "tied_property_ids": tie_up_colls, "override_ltv": override_ltv
             })
             st.success(f"✅ Added [{ac_id}] {l_type}")
-            st.session_state.pop('generated_pdf', None)
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1020,72 +954,74 @@ if st.session_state.loans:
             eff_income = fix_inc + (var_inc * (1.0 - (stress_inc_val / 100.0)))
         else:
             eff_income = gross_income * (1.0 - (stress_inc_val / 100.0))
-
+            
     df_dti = pd.DataFrame(st.session_state.loans)
-    df_dti['Amount'] = df_dti['Principal']
-
+    df_dti['Amount'] = df_dti['Principal'] 
+    
     def get_stress_row(row, s_rate):
         if row['Is_Manual']: return row['Base_Obligation'], row['Base Rate']
         new_r = row['Base Rate'] + s_rate
         return calculate_obligation(row['Loan Type'], row['Amount'], new_r, row['Tenure']), new_r
-
+        
     df_dti[['Obligation', 'Effective_Rate']] = df_dti.apply(lambda x: pd.Series(get_stress_row(x, stress_rate_val)), axis=1)
     df_dti_res = run_waterfall_allocation(df_dti, eff_income)
-
+    
     dti_overall_pass = all(df_dti_res['Pass_Status'])
     dti_agg_dti = eff_income / df_dti_res['Obligation'].sum() if df_dti_res['Obligation'].sum() > 0 else 0
     dti_shortfall = 0.0
     if not dti_overall_pass:
         req_ideal = sum(r['Obligation'] * r['Required Multiplier'] for _, r in df_dti_res.iterrows())
         dti_shortfall = max(0, req_ideal - eff_income)
-
+        
     ltv_results, ltv_summary = run_portfolio_ltv(st.session_state.loans, st.session_state.fmv_sources)
     ltv_overall_pass = ltv_summary['overall_pass']
-
+    
+    # --- DTI UI ---
     st.markdown("### 📉 Debt-to-Income (DTI) Analysis")
     if enable_stress:
         st.info(f"Active Scenario: **{scenario_name}** | Rate Shock: +{stress_rate_val}% | Income Shock: -{stress_inc_val}%")
-
+        
     k1, k2, k3, k4 = st.columns(4)
     with k1: st.markdown(f"<div class='metric-card'><div class='metric-label'>Monthly Obligation</div><div class='metric-value'>Rs.{df_dti_res['Obligation'].sum():,.0f}</div></div>", unsafe_allow_html=True)
     with k2: st.markdown(f"<div class='metric-card'><div class='metric-label'>Aggregate Coverage</div><div class='metric-value'>{dti_agg_dti:.2f}x</div></div>", unsafe_allow_html=True)
     with k3: st.markdown(f"<div class='metric-card'><div class='metric-label'>Effective Income</div><div class='metric-value'>Rs.{eff_income:,.0f}</div></div>", unsafe_allow_html=True)
     with k4: st.markdown(f"<div class='metric-card'><div class='metric-label'>Income Shortfall</div><div class='metric-value'>Rs.{dti_shortfall:,.0f}</div></div>", unsafe_allow_html=True)
-
+    
     if dti_overall_pass:
         st.markdown("<div class='status-banner status-pass'>✅ DTI REQUEST APPROVED</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div class='status-banner status-fail'>⚠️ DTI PORTFOLIO DECLINED</div>", unsafe_allow_html=True)
-
+        
     disp_dti = df_dti_res.copy()
     disp_dti['Status'] = disp_dti['Pass_Status'].apply(lambda x: "✅ PASS" if x else "❌ FAIL")
     st.dataframe(disp_dti[['Loan Type', 'Amount', 'Effective_Rate', 'Obligation', 'Available_Income_Snapshot', 'Actual Coverage', 'Required Multiplier', 'Status']], hide_index=True, use_container_width=True)
-
+    
     st.markdown("---")
-
+    
+    # --- LTV UI ---
     st.markdown("### 🏠 Loan-to-Value (LTV) Analysis")
     k5, k6, k7, k8 = st.columns(4)
     with k5: st.markdown(f"<div class='metric-card'><div class='metric-label'>Total Exposure</div><div class='metric-value'>Rs.{ltv_summary['total_exposure']:,.0f}</div></div>", unsafe_allow_html=True)
     with k6: st.markdown(f"<div class='metric-card'><div class='metric-label'>Total FMV</div><div class='metric-value'>Rs.{ltv_summary['total_fmv']:,.0f}</div></div>", unsafe_allow_html=True)
     with k7: st.markdown(f"<div class='metric-card'><div class='metric-label'>Weighted LTV</div><div class='metric-value'>{ltv_summary['wtd_ltv']:.2f}%</div></div>", unsafe_allow_html=True)
     with k8: st.markdown(f"<div class='metric-card'><div class='metric-label'>Aggregate LTV</div><div class='metric-value'>{ltv_summary['aggregate_ltv']:.2f}%</div></div>", unsafe_allow_html=True)
-
+    
     if ltv_overall_pass:
         st.markdown("<div class='status-banner status-pass'>✅ LTV PORTFOLIO APPROVED</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div class='status-banner status-fail'>⚠️ LTV PORTFOLIO DECLINED</div>", unsafe_allow_html=True)
-
+        
     disp_ltv = []
     for r in ltv_results:
         is_unsec = r.get('Is_Unsecured', False)
         ltv_val = r.get('LTV%')
         max_ltv = r.get('Max LTV%')
-
+        
         if is_unsec: ltv_disp = "EXEMPT"
         elif r.get('No_FMV_Error'): ltv_disp = "NO FMV"
         elif ltv_val is None: ltv_disp = "N/A"
         else: ltv_disp = f"{ltv_val:.2f}%"
-
+            
         disp_ltv.append({
             "ID": r.get('loan_account_id'), "Facility": r['Loan Type'], "Principal": f"Rs. {r['Principal']:,.0f}",
             "Total FMV": "N/A" if is_unsec else f"Rs. {r['Total FMV']:,.0f}",
@@ -1093,9 +1029,10 @@ if st.session_state.loans:
             "Status": "✅ PASS" if r['Pass_Status'] else "❌ FAIL"
         })
     st.dataframe(pd.DataFrame(disp_ltv), hide_index=True, use_container_width=True)
-
+    
     st.markdown("---")
-
+    
+    # --- PDF EXPORT ---
     st.markdown("### 📄 Generate Continuous Report")
     ec1, ec2, ec3 = st.columns([2, 1, 1])
     with ec1:
@@ -1109,14 +1046,15 @@ if st.session_state.loans:
             else:
                 with st.spinner("Generating continuous document..."):
                     r_type = 'Integrated' if 'Integrated' in report_type else ('DTI' if 'DTI' in report_type else 'LTV')
-
+                    
+                    # Build unified payload
                     payload = {
                         'gross_income': gross_income,
                         'eff_income': eff_income,
                         'scenario_name': scenario_name,
                         'stress_rate': stress_rate_val,
                         'stress_inc': stress_inc_val,
-                        'enable_stress': enable_stress,
+                        'enable_stress': enable_stress,  # Flag to control PDF content
                         'dti_overall_pass': dti_overall_pass,
                         'dti_agg_dti': dti_agg_dti,
                         'dti_shortfall': dti_shortfall,
@@ -1126,22 +1064,20 @@ if st.session_state.loans:
                         'income_sources': st.session_state.income_sources if inc_mode == "Multiple Sources" else [],
                         'fmv_sources': st.session_state.fmv_sources
                     }
-
+                        
                     try:
                         pdf_bytes = generate_integrated_pdf(report_name.strip(), payload)
                         st.session_state['generated_pdf'] = pdf_bytes
                         st.session_state['generated_pdf_name'] = f"{r_type}_Report_{report_name.strip().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
                         st.rerun()
                     except Exception as e:
-                        st.session_state.pop('generated_pdf', None)
                         st.error(f"PDF generation failed: {e}")
-
-    if st.session_state.get('generated_pdf'):
-        pdf_data = st.session_state['generated_pdf']
-        st.success(f"✅ Continuous Report generated successfully ({len(pdf_data)/1024:.1f} KB).")
+                        
+    if 'generated_pdf' in st.session_state:
+        st.success("✅ Continuous Report generated successfully.")
         st.download_button(
             label="⬇️ Download PDF Now",
-            data=pdf_data,
+            data=st.session_state['generated_pdf'],
             file_name=st.session_state['generated_pdf_name'],
             mime="application/pdf",
             type="secondary",
